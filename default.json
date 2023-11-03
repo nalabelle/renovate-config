@@ -22,7 +22,10 @@
   },
   "customManagers": [
     {
-      // Configures Renovate to look for items like 
+      // Configures Renovate to look for items like
+      // > # renovate: datasource=github-tags depName=nodejs/node versioning=node
+      // > ENV NODE_VERSION=10.19.0
+      // See docs: https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "customType": "regex",
       "fileMatch": ['(^|/|\\.)([Dd]ocker|[Cc]ontainer)file$', '(^|/)([Dd]ocker|[Cc]ontainer)file[^/]*$', '(^|/|\\.)Earthfile$'],
       "matchStrings": [
