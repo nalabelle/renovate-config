@@ -16,4 +16,14 @@
   "schedule": [
     "on tuesday"
   ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ['(^|/|\\.)([Dd]ocker|[Cc]ontainer)file$', '(^|/)([Dd]ocker|[Cc]ontainer)file[^/]*$', '(^|/|\\.)Earthfile$'],
+      "matchStrings": [
+        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    },
+  ],
 }
