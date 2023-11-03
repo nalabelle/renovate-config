@@ -16,8 +16,13 @@
   "schedule": [
     "on tuesday"
   ],
+  "dockerfile": {
+    // Support Earthfile as dockerfile for now
+    "fileMatch": ['(^|/|\\.)Earthfile$']
+  },
   "customManagers": [
     {
+      // Configures Renovate to look for items like 
       "customType": "regex",
       "fileMatch": ['(^|/|\\.)([Dd]ocker|[Cc]ontainer)file$', '(^|/)([Dd]ocker|[Cc]ontainer)file[^/]*$', '(^|/|\\.)Earthfile$'],
       "matchStrings": [
