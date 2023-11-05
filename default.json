@@ -34,4 +34,14 @@
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
     },
   ],
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "matchPackagePrefixes": ["nalabelle/"],
+      // 0.1.0-debian12.2--testing
+      // 13.1.123
+      // 13.1.123-test.12345-r14
+      // 13.1.123--r14
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-(?<compatibility>[A-Za-z0-9_\\.]+))?(?:-{1,2}(?<prerelease>[\\w\\d\\.-_]+))?$"
+  ],
 }
