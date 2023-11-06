@@ -6,12 +6,14 @@
     "group:allNonMajor",
     // Enables dockerfile version updates, not just digests
     "preview:dockerVersions",
-    ":automergeMinor",
-    ":automergeLinters",
     ":automergeDigest",
+    ":automergeLinters",
+    ":automergeMinor",
     ":rebaseStalePrs",
+    ":semanticCommits",
     ":separateMajorReleases",
     "docker:enableMajor",
+    "regexManagers:dockerfileVersions", //Like the regex customManager below for Earthfiles
   ],
   "schedule": [
     "on tuesday"
@@ -27,7 +29,7 @@
       // > ENV NODE_VERSION=10.19.0
       // See docs: https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "customType": "regex",
-      "fileMatch": ['(^|/|\\.)([Dd]ocker|[Cc]ontainer)file$', '(^|/)([Dd]ocker|[Cc]ontainer)file[^/]*$', '(^|/|\\.)Earthfile$'],
+      "fileMatch": ['(^|/|\\.)Earthfile$'],
       "matchStrings": [
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
       ],
@@ -37,7 +39,7 @@
   "packageRules": [
     {
       "matchDatasources": ["docker"],
-      "matchPackagePrefixes": ["nalabelle/"],
+      "matchPackagePrefixes": ["nalabelle/build/"],
       // 0.1.0-debian12.2--testing
       // 13.1.123
       // 13.1.123-test.12345-r14
