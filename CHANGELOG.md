@@ -1,3 +1,9 @@
+## 0.1.1 (2023-11-05)
+
+### Fix
+
+- **.github/workflows/bumpversion.yaml**: configure workflow to use a branch
+
 ## 0.1.0 (2023-11-06)
 
 ### Feat
