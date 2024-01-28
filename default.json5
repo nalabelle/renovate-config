@@ -37,10 +37,11 @@
   ],
   "packageRules": [
     {
-      "groupName": "all non-major depdendencies, including digest",
+      "groupName": "all non-major dependencies, including digests",
       "groupSlug": "all-minor-patch-digest",
       "matchPackagePatterns": [ "*" ],
-      "matchUpdateTypes": [ "digest", "minor", "patch" ]
+      "matchUpdateTypes": [ "digest", "minor", "patch" ],
+      "schedule": ["at any time"]
     },
     {
       "matchDatasources": ["docker"],
