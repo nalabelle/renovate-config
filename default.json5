@@ -3,7 +3,6 @@
   "configMigration": true,
   "extends": [
     "config:best-practices",
-    "group:allNonMajor",
     // Enables dockerfile version updates, not just digests
     "preview:dockerVersions",
     ":automergeDigest",
@@ -37,6 +36,12 @@
     },
   ],
   "packageRules": [
+    {
+      "groupName": "all non-major depdendencies, including digest",
+      "groupSlug": "all-minor-patch-digest",
+      "matchPackagePatterns": [ "*" ],
+      "matchUpdateTypes": [ "digest", "minor", "patch" ]
+    },
     {
       "matchDatasources": ["docker"],
       "matchPackagePrefixes": ["nalabelle/build/"],
