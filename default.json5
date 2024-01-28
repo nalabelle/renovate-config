@@ -40,7 +40,8 @@
       "groupName": "all non-major dependencies, including digests",
       "groupSlug": "all-minor-patch-digest",
       "matchPackagePatterns": [ "*" ],
-      "matchUpdateTypes": [ "digest", "minor", "patch" ],
+      "matchUpdateTypes": [ "digest", "minor", "patch", "pin" ],
+      "automerge": true,
       "schedule": ["at any time"]
     },
     {
