@@ -1,32 +1,38 @@
-name: Bump version
+name: Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE'
+      - '.github/**'
 
 jobs:
-  bump-version:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+  deploy:
     runs-on: ubuntu-latest
-    name: "Bump version and create changelog with commitizen"
+    permissions:
+      contents: write
     steps:
-      - name: Check out
+      - name: Checkout Code
         uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          fetch-depth: 0
-      - name: Create bump and changelog
-        uses: commitizen-tools/commitizen-action@master
-        with:
-          github_token: "${{ secrets.PERSONAL_ACCESS_TOKEN }}"
-          branch: "cz-version-${{ github.run_number }}"
-          changelog_increment_filename: body.md
-      - name: Release
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2
-        with:
-          body_path: "body.md"
-          tag_name: "${{ env.REVISION }}"
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: false
+
+      - name: Create Release
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
+        with:
+          allowUpdates: true
+          makeLatest: true
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.tag_version.outputs.new_tag != null }}
