@@ -2,7 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/jetpack-io/devbox/0.10.3/.schema/devbox.schema.json",
   "packages": [
     "convco@latest",
-    "nodePackages.prettier@latest"
+    "nodePackages.prettier@latest",
+    "pre-commit@latest"
   ],
   "shell": {
     "init_hook": [

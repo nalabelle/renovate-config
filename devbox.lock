@@ -96,6 +96,70 @@
           "store_path": "/nix/store/izx5dss5sljcbs6w3kqy943cckh3n999-prettier-3.3.3"
         }
       }
+    },
+    "pre-commit@latest": {
+      "last_modified": "2025-01-11T15:21:40Z",
+      "resolved": "github:NixOS/nixpkgs/590cc22eefd616c8f90608870d28afe25d37e8b8#pre-commit",
+      "source": "devbox-search",
+      "version": "4.0.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/9cnm40lfhkykyj7bwhg5ldb1x1r4piv9-pre-commit-4.0.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/g53lmq7ii59yh5la4ybj2i0zsc25avsd-pre-commit-4.0.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/9cnm40lfhkykyj7bwhg5ldb1x1r4piv9-pre-commit-4.0.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/ajy3kf03maa564l2l0jqvgs7plw0dma9-pre-commit-4.0.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/fzc8p64gaidhmvn0v11ky5h01jkhc5my-pre-commit-4.0.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/ajy3kf03maa564l2l0jqvgs7plw0dma9-pre-commit-4.0.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/9if5395ypzra8wv10qywyx74aq4abk2n-pre-commit-4.0.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/ixc8jnpf445cvf799hn6nhm9iracksn5-pre-commit-4.0.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/9if5395ypzra8wv10qywyx74aq4abk2n-pre-commit-4.0.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/p8dn88jif3gc7yjsiw50yfng125s18bw-pre-commit-4.0.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/6rjz15w4mfz1zsf9cq16qlz38fnxh0lw-pre-commit-4.0.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/p8dn88jif3gc7yjsiw50yfng125s18bw-pre-commit-4.0.1"
+        }
+      }
     }
   }
 }
