@@ -12,14 +12,12 @@
     ":semanticCommits",
     ":separateMajorReleases",
     "docker:enableMajor",
-    "regexManagers:dockerfileVersions", //Like the regex customManager below for Earthfiles
+    "regexManagers:dockerfileVersions" //Like the regex customManager below for Earthfiles
   ],
-  "schedule": [
-    "on tuesday"
-  ],
+  "schedule": ["* 8-12 * * 6"],
   "dockerfile": {
     // Support Earthfile as dockerfile for now
-    "fileMatch": ['(^|/|\\.)Earthfile$']
+    "fileMatch": ["(^|/|\\.)Earthfile$"]
   },
   "customManagers": [
     {
@@ -28,21 +26,20 @@
       // > ENV NODE_VERSION=10.19.0
       // See docs: https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
       "customType": "regex",
-      "fileMatch": ['(^|/|\\.)Earthfile$'],
+      "fileMatch": ["(^|/|\\.)Earthfile$"],
       "matchStrings": [
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
-    },
+    }
   ],
   "packageRules": [
     {
       "groupName": "all non-major dependencies, including digests",
       "groupSlug": "all-minor-patch-digest",
-      "matchPackagePatterns": [ "*" ],
-      "matchUpdateTypes": [ "digest", "minor", "patch", "pin" ],
-      "automerge": true,
-      "schedule": ["at any time"]
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["digest", "minor", "patch", "pin"],
+      "automerge": true
     },
     {
       "matchDatasources": ["docker"],
@@ -53,5 +50,5 @@
       // 13.1.123--r14
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-(?<compatibility>[A-Za-z0-9_\\.]+))?(?:-{1,2}(?<prerelease>[\\w\\d\\.-_]+))?$"
     }
-  ],
+  ]
 }
