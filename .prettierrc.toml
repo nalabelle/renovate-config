@@ -1,0 +1,14 @@
+printWidth = 100
+
+[[overrides]]
+files = ["*.yaml", ".yml"]
+[overrides.options]
+trailingComma = "none"
+bracketSpacing = false
+
+[[overrides]]
+files = ["*.json5"]
+[overrides.options]
+trailingComma = "none"
+singleQuote = false
+quoteProps = "preserve"
