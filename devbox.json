@@ -3,7 +3,7 @@
   "packages": [
     "convco@0.6.1",
     "nodePackages.prettier@2.8.8",
-    "pre-commit@2.20.0"
+    "pre-commit@4.0.1"
   ],
   "shell": {
     "init_hook": [
