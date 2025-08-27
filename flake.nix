@@ -1,0 +1,148 @@
+{
+  description = "Infrastructure development environment";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    git-hooks.url = "github:cachix/git-hooks.nix";
+  };
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      ...
+    }@inputs:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
+      in
+      {
+        # Run the hooks with `nix fmt`.
+        formatter = (
+          let
+            config = self.checks.${system}.pre-commit-check.config;
+            inherit (config) package configFile;
+            script = ''
+              ${package}/bin/pre-commit run --all-files --config ${configFile}
+            '';
+          in
+          pkgs.writeShellScriptBin "pre-commit-run" script
+        );
+
+        # Run the hooks in a sandbox with `nix flake check`.
+        # Read-only filesystem and no internet access.
+        # https://github.com/cachix/git-hooks.nix#hooks
+        checks = {
+          pre-commit-check = inputs.git-hooks.lib.${system}.run {
+            src = ./.;
+            hooks = {
+              fix-byte-order-marker.enable = true;
+              check-case-conflicts.enable = true;
+              check-executables-have-shebangs.enable = true;
+              end-of-file-fixer.enable = true;
+              mixed-line-endings.enable = true;
+              trim-trailing-whitespace.enable = true;
+              check-shebang-scripts-are-executable = {
+                enable = true;
+                excludes = [ "\.j2$" ];
+              };
+              check-symlinks.enable = true;
+              check-merge-conflicts.enable = true;
+
+              check-json.enable = true;
+              check-yaml = {
+                enable = true;
+                args = [ "--allow-multiple-documents" ];
+              };
+              check-toml.enable = true;
+              shellcheck.enable = true;
+
+              # Custom hooks from jumanjihouse/pre-commit-hooks
+              forbid-binary = {
+                name = "forbid-binary";
+                description = "Forbid binary files from being committed";
+                entry =
+                  let
+                    script = pkgs.writeShellScript "forbid-binary" ''
+                      set -e
+                      for file in "$@"; do
+                        if [[ -f "$file" ]] && ! file --mime-encoding "$file" | grep -q 'us-ascii\|utf-8'; then
+                          echo "Binary file detected: $file"
+                          exit 1
+                        fi
+                      done
+                    '';
+                  in
+                  "${script}";
+                language = "system";
+                types = [ "file" ];
+              };
+
+              script-must-have-extension = {
+                name = "script-must-have-extension";
+                description = "Ensure that executable scripts have file extensions";
+                entry =
+                  let
+                    script = pkgs.writeShellScript "script-must-have-extension" ''
+                      set -e
+                      for file in "$@"; do
+                        if [[ -x "$file" ]] && [[ ! "$file" =~ \. ]]; then
+                          echo "Executable script without extension: $file"
+                          exit 1
+                        fi
+                      done
+                    '';
+                  in
+                  "${script}";
+                language = "system";
+                types = [ "executable" ];
+                excludes = [ "\.envrc$" ];
+              };
+
+              script-must-not-have-extension = {
+                name = "script-must-not-have-extension";
+                description = "Ensure that non-executable scripts do not have file extensions";
+                entry =
+                  let
+                    script = pkgs.writeShellScript "script-must-not-have-extension" ''
+                      set -e
+                      for file in "$@"; do
+                        if [[ ! -x "$file" ]] && [[ "$file" =~ ^[^/]*\.[^/]*$ ]] && file --mime-type "$file" | grep -q 'text/x-shellscript\|text/x-script'; then
+                          echo "Non-executable script with extension: $file"
+                          exit 1
+                        fi
+                      done
+                    '';
+                  in
+                  "${script}";
+                language = "system";
+                types = [ "text" ];
+              };
+
+              nixfmt-rfc-style.enable = true;
+            };
+          };
+        };
+
+        devShells.default = pkgs.mkShell {
+          inherit (self.checks.${system}.pre-commit-check) shellHook enabledPackages;
+          RENOVATE_CONFIG_FILE = "config.js";
+          LOG_LEVEL = "INFO";
+
+          buildInputs = with pkgs; [
+            pre-commit
+            prettier
+
+            renovate
+            vendir
+          ];
+        };
+      }
+    );
+}
