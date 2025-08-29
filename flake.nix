@@ -141,7 +141,6 @@
 
             renovate
             vendir
-            nodejs_24
           ];
         };
       }
