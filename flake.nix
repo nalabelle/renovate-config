@@ -140,7 +140,18 @@
             prettier
 
             renovate
-            vendir
+
+            # Renovate support tools
+            bash
+            coreutils
+            curl
+            gitMinimal
+            gnumake
+            nix
+            nixos-rebuild
+            nodejs_latest
+            openssh
+            wget
           ];
         };
       }

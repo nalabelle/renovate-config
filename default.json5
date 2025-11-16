@@ -1,0 +1,75 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "configMigration": true,
+  "extends": [
+    "config:best-practices",
+    // Enables dockerfile version updates, not just digests
+    "preview:dockerVersions",
+    ":automergeDigest",
+    ":automergeLinters",
+    ":automergeMinor",
+    ":rebaseStalePrs",
+    ":semanticCommits",
+    ":separateMajorReleases",
+    "docker:enableMajor",
+    "regexManagers:dockerfileVersions" //Like the regex customManager below for Dockerfiles
+  ],
+  // schedule uses cron syntax: minute hour day-of-month month day-of-week
+  // "* 1-5 * * 6" means: any minute, between 1 AM and 5 AM, any day of month, any month, on Saturday (day 6)
+  // This schedules Renovate to run between 1 AM to 5 AM Pacific Time on Saturdays only
+  "schedule": ["* 1-5 * * 6"],
+  "timezone": "America/Los_Angeles",
+  // Enable Nix package manager support
+  "nix": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      // Configures Renovate to look for ENV/ARG version lines in Dockerfiles.
+      // > # renovate: datasource=github-tags depName=nodejs/node versioning=node
+      // > ENV NODE_VERSION=10.19.0
+      // See docs: https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
+      "customType": "regex",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    }
+  ],
+  "postUpdateOptions": ["npmDedupe"],
+  "packageRules": [
+    {
+      // Add reminder comment for npm packages that need hash updates
+      "matchFileNames": ["packages/*/package.json"],
+      "prBodyNotes": [
+        "⚠️ **Manual Action Required**: After merging this PR, run `./tools/update-npm-hashes` to update the corresponding Nix package hashes."
+      ]
+    },
+    {
+      // Add 2-week delay for Node.js updates in DevBox configurations
+      // Avoids needing to run builds by waiting for packages to be cached
+      "matchFileNames": ["devbox.json"],
+      "matchPackagePatterns": ["^nodejs(_\\d+)?$"],
+      "stabilityDays": 14
+    },
+    {
+      // Configure lockfile maintenance to run once a week
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "schedule": ["* 1-5 * * 6"], // Same schedule as main config: Saturday 1-5 AM
+      "groupName": "Lockfile Maintenance",
+      "automerge": true
+    },
+    {
+      "groupName": "all non-major dependencies, including digests",
+      "groupSlug": "all-minor-patch-digest",
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["digest", "minor", "patch", "pin"],
+      "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["pin"],
+      "automerge": true
+    }
+  ]
+}
