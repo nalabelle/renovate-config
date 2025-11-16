@@ -143,6 +143,7 @@
 
             # Renovate support tools
             bash
+            cargo
             coreutils
             curl
             gitMinimal
