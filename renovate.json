@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-      "local>default.json5"
+      "local>nalabelle/renovate-config//default.json5"
   ]
 }
