@@ -40,6 +40,23 @@
   "postUpdateOptions": ["npmDedupe"],
   "packageRules": [
     {
+      // Workaround for Renovate bug #33991: Disable digest updates and use nix flake update
+      "matchManagers": ["nix"],
+      "matchUpdateTypes": ["digest"],
+      "enabled": false
+    },
+    {
+      // Workaround for Renovate bug #33991: Use nix flake update for version updates
+      "matchManagers": ["nix"],
+      "postUpgradeTasks": {
+        "commands": [
+          "nix flake update --commit-lock-file"
+        ],
+        "fileFilters": ["flake.lock"],
+        "executionMode": "update"
+      }
+    },
+    {
       // Add reminder comment for npm packages that need hash updates
       "matchFileNames": ["packages/*/package.json"],
       "prBodyNotes": [
