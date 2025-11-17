@@ -367,8 +367,9 @@ process_repos() {
   for repo in $repos; do
     echo "=== Processing $repo ==="
 
-    update_repo_flake "$repo"
-    local result=$?
+    # Capture return code without triggering set -e
+    update_repo_flake "$repo" || local result=$?
+    result=${result:-0}
 
     case $result in
       0) success_count=$((success_count + 1)) ;;
