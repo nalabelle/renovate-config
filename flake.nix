@@ -148,6 +148,7 @@
             curl
             gitMinimal
             gnumake
+            jq
             nix
             nixos-rebuild
             nodejs_latest

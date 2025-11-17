@@ -1,0 +1,428 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Update flake.lock files across all autodiscovered repositories
+# This script works around Renovate bug #33991 which prevents digest updates for Nix flakes
+
+# Global flag for dry-run mode
+DRY_RUN=false
+
+# Get renovate config for a repo (outputs raw to file)
+get_renovate_config() {
+  local repo="$1"
+  local output_file="$2"
+
+  if ! renovate --dry-run --autodiscover=false --print-config=true "$repo" > "$output_file" 2>&1; then
+    echo "ERROR: Failed to get config for $repo" >&2
+    exit 1
+  fi
+}
+
+# Extract clean JSON from a file containing renovate --print-config output
+extract_config_from_file() {
+  local input_file="$1"
+  local output_file="$2"
+
+  sed -n '/^ INFO: Full resolved config/,/^ INFO:/p' "$input_file" | \
+    sed '1d;$d' | \
+    sed '1s/^/{/; $s/$/}/' > "$output_file"
+}
+
+# Get config value using jq
+get_config_value() {
+  local config_file="$1"
+  local jq_path="$2"
+
+  jq -r "$jq_path" "$config_file"
+}
+
+# Parse git author string into name and email
+parse_git_author() {
+  local author="$1"
+  local field="$2"  # "name" or "email"
+
+  if [ "$field" = "name" ]; then
+    echo "${author%% <*}"
+  else
+    local temp="${author#*<}"
+    echo "${temp%>*}"
+  fi
+}
+
+# Get platform endpoint from config.js
+get_platform_endpoint() {
+  grep -E '^\s*"endpoint":' "$RENOVATE_CONFIG_FILE" | sed 's/.*"endpoint":\s*"\([^"]*\)".*/\1/'
+}
+
+# Check if current time matches schedule (cron format)
+matches_schedule() {
+  local schedule="$1"
+
+  # If schedule is "at any time", always match
+  if [ "$schedule" = "at any time" ]; then
+    return 0
+  fi
+
+  # Parse cron schedule: minute hour day-of-month month day-of-week
+  # Example: "* 1-5 * * 6" = any minute, 1-5 AM, any day, any month, Saturday
+  local hour dow current_hour current_dow
+  hour=$(echo "$schedule" | awk '{print $2}')
+  dow=$(echo "$schedule" | awk '{print $5}')
+
+  # Get current time
+  current_hour=$(date +%H | sed 's/^0//')
+  current_dow=$(date +%u)  # 1-7 (Monday-Sunday)
+
+  # Convert Sunday from 7 to 0 for cron compatibility
+  [ "$current_dow" = "7" ] && current_dow=0
+
+  # Check day of week and hour (simplified schedule matching)
+  [ "$dow" != "*" ] && [ "$dow" != "$current_dow" ] && return 1
+  [ "$hour" != "*" ] && ! echo "$hour" | grep -qE "^($current_hour|$current_hour-|.*-$current_hour)$" && return 1
+
+  return 0
+}
+
+# Get API URL for platform
+get_api_url() {
+  local repo="$1"
+  local platform_endpoint="$2"
+  local platform="$3"
+  local endpoint_type="$4"  # "pulls" or "pulls-list"
+
+  local owner repo_name
+  owner=$(echo "$repo" | cut -d'/' -f1)
+  repo_name=$(echo "$repo" | cut -d'/' -f2)
+
+  case "$platform" in
+    forgejo|gitea)
+      if [ "$endpoint_type" = "pulls-list" ]; then
+        echo "${platform_endpoint}/api/v1/repos/${owner}/${repo_name}/pulls?state=open"
+      else
+        echo "${platform_endpoint}/api/v1/repos/${owner}/${repo_name}/pulls"
+      fi
+      ;;
+    github)
+      if [ "$endpoint_type" = "pulls-list" ]; then
+        echo "https://api.github.com/repos/${owner}/${repo_name}/pulls?state=open"
+      else
+        echo "https://api.github.com/repos/${owner}/${repo_name}/pulls"
+      fi
+      ;;
+    *)
+      echo "ERROR: Unsupported platform: $platform" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# Check if PR already exists for branch
+pr_exists() {
+  local repo="$1"
+  local branch_name="$2"
+  local platform_endpoint="$3"
+  local platform="$4"
+
+  local api_url response
+  api_url=$(get_api_url "$repo" "$platform_endpoint" "$platform" "pulls-list")
+  response=$(curl -s -H "Authorization: token ${RENOVATE_TOKEN}" "$api_url")
+
+  # Check if any PR exists with this head branch
+  if echo "$response" | jq -e ".[] | select(.head.ref == \"$branch_name\")" >/dev/null 2>&1; then
+    return 0  # PR exists
+  else
+    return 1  # No PR
+  fi
+}
+
+# Create a pull request via platform API
+create_pull_request() {
+  local repo="$1"
+  local branch_name="$2"
+  local default_branch="$3"
+  local platform_endpoint="$4"
+  local platform="$5"
+
+  local api_url pr_body
+  api_url=$(get_api_url "$repo" "$platform_endpoint" "$platform" "pulls")
+
+  pr_body=$(cat <<'EOF'
+{
+  "title": "chore(deps): update flake.lock",
+  "head": "BRANCH_NAME",
+  "base": "DEFAULT_BRANCH",
+  "body": "Updates Nix flake inputs to their latest versions.\n\nThis PR was automatically created to work around Renovate bug #33991 which prevents digest updates for Nix flakes."
+}
+EOF
+)
+
+  pr_body=$(echo "$pr_body" | sed "s/BRANCH_NAME/$branch_name/" | sed "s/DEFAULT_BRANCH/$default_branch/")
+
+  curl -s -X POST "$api_url" \
+    -H "Authorization: token ${RENOVATE_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$pr_body" >/dev/null 2>&1
+}
+
+# Discover repositories using Renovate
+discover_repos() {
+  local repos_file
+  repos_file=$(mktemp)
+  trap 'rm -f "$repos_file"' RETURN
+
+  if ! renovate --autodiscover --write-discovered-repos="$repos_file" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  jq -r '.[]' "$repos_file"
+}
+
+# Update flake.lock in a single repository
+update_repo_flake() {
+  local repo="$1"
+  local repo_dir
+  repo_dir="/tmp/flake-update-$(echo "$repo" | tr '/' '-')"
+
+  rm -rf "$repo_dir"
+
+  # Get Renovate config for this repo
+  echo "Getting Renovate config for $repo..."
+  local raw_config clean_config
+  raw_config=$(mktemp)
+  clean_config=$(mktemp)
+  trap 'rm -f "$raw_config" "$clean_config"' RETURN
+
+  if ! get_renovate_config "$repo" "$raw_config"; then
+    echo "✗ Failed to get Renovate config for $repo"
+    cd - >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  extract_config_from_file "$raw_config" "$clean_config"
+
+  # Extract settings from config (error if not set)
+  local nix_enabled git_author branch_prefix platform lockfile_branch schedule automerge
+  nix_enabled=$(get_config_value "$clean_config" '.config.nix.enabled')
+  git_author=$(get_config_value "$clean_config" '.config.gitAuthor')
+  branch_prefix=$(get_config_value "$clean_config" '.config.branchPrefix')
+  platform=$(get_config_value "$clean_config" '.config.platform')
+  lockfile_branch=$(get_config_value "$clean_config" '.config.lockFileMaintenance.branchTopic')
+  schedule=$(get_config_value "$clean_config" '.config.schedule[0]')
+  automerge=$(get_config_value "$clean_config" '.config.lockFileMaintenance.automerge')
+
+  # Check if Nix is enabled before cloning
+  if [ "$nix_enabled" != "true" ]; then
+    echo "⊘ Nix manager disabled in $repo, skipping"
+    return 2
+  fi
+
+  # Check if we're within the schedule
+  if ! matches_schedule "$schedule"; then
+    echo "⊘ Outside schedule for $repo, skipping"
+    return 2
+  fi
+
+  # Get platform endpoint
+  local platform_endpoint
+  platform_endpoint=$(get_platform_endpoint)
+
+  # Clone repo
+  if ! git clone "${platform_endpoint}/${repo}" "$repo_dir" 2>/dev/null; then
+    echo "✗ Failed to clone $repo"
+    return 1
+  fi
+
+  cd "$repo_dir"
+
+  # Skip if no flake.nix
+  if [ ! -f flake.nix ]; then
+    echo "⊘ No flake.nix in $repo, skipping"
+    cd - >/dev/null
+    return 2
+  fi
+
+  # Configure git
+  git config user.name "$(parse_git_author "$git_author" "name")"
+  git config user.email "$(parse_git_author "$git_author" "email")"
+
+  # Get default branch
+  local default_branch
+  default_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+
+  # Use lockfile maintenance branch name from config
+  local branch_name="${branch_prefix}${lockfile_branch}"
+
+  # Update flake.lock
+  if ! nix flake update 2>/dev/null; then
+    echo "✗ Failed to update flake.lock in $repo"
+    cd - >/dev/null
+    return 1
+  fi
+
+  # Check if there are actual changes to flake.lock
+  if git diff --quiet flake.lock; then
+    echo "○ No changes to flake.lock in $repo"
+    cd - >/dev/null
+    return 2
+  fi
+
+  if [ "$DRY_RUN" = "true" ]; then
+    echo "DRY-RUN: Would create branch $branch_name"
+    echo "DRY-RUN: Would commit flake.lock changes"
+
+    # Check if would push
+    git add flake.lock
+    git commit -m "chore(deps): lock file maintenance" \
+                -m "Updates Nix flake inputs to their latest versions" 2>/dev/null || true
+
+    if git diff --quiet "origin/$default_branch" 2>/dev/null; then
+      echo "DRY-RUN: No changes compared to $default_branch, would not push"
+      cd - >/dev/null
+      return 2
+    else
+      echo "DRY-RUN: Would push to origin/$branch_name"
+      if [ "$automerge" = "true" ]; then
+        echo "DRY-RUN: Would create PR in $repo (automerge enabled)"
+      else
+        echo "DRY-RUN: Would create PR in $repo (automerge disabled)"
+      fi
+      cd - >/dev/null
+      return 0
+    fi
+  fi
+
+  # Create/checkout update branch
+  if ! git checkout -B "$branch_name" 2>/dev/null; then
+    echo "✗ Failed to create branch in $repo"
+    cd - >/dev/null
+    return 1
+  fi
+
+  # Commit with semantic commit message
+  git add flake.lock
+  if ! git commit -m "chore(deps): lock file maintenance" \
+                  -m "Updates Nix flake inputs to their latest versions" 2>/dev/null; then
+    echo "✗ Failed to commit changes in $repo"
+    cd - >/dev/null
+    return 1
+  fi
+
+  # Check if branch differs from default branch
+  if git diff --quiet "origin/$default_branch" 2>/dev/null; then
+    echo "○ No changes compared to $default_branch in $repo"
+    cd - >/dev/null
+    return 2
+  fi
+
+  # Push the branch
+  if ! git push -f origin "$branch_name" 2>/dev/null; then
+    echo "✗ Failed to push $repo"
+    cd - >/dev/null
+    return 1
+  fi
+
+  # Check if PR already exists, create if not
+  if pr_exists "$repo" "$branch_name" "$platform_endpoint" "$platform"; then
+    echo "✓ Updated $repo (PR already exists)"
+  else
+    if create_pull_request "$repo" "$branch_name" "$default_branch" "$platform_endpoint" "$platform"; then
+      echo "✓ Updated $repo and created PR"
+    else
+      echo "⚠ Pushed $repo but failed to create PR"
+    fi
+  fi
+
+  cd - >/dev/null
+  return 0
+}
+
+# Process multiple repositories
+process_repos() {
+  local repos="$1"
+  local success_count=0
+  local skip_count=0
+  local fail_count=0
+
+  for repo in $repos; do
+    echo "=== Processing $repo ==="
+
+    update_repo_flake "$repo"
+    local result=$?
+
+    case $result in
+      0) ((success_count++)) ;;
+      1) ((fail_count++)) ;;
+      2) ((skip_count++)) ;;
+    esac
+
+    echo ""
+  done
+
+  echo "=== Summary ==="
+  echo "Total repositories: $(echo "$repos" | wc -l)"
+  echo "Successfully updated: $success_count"
+  echo "Skipped (no flake or no changes): $skip_count"
+  echo "Failed: $fail_count"
+
+  if [ $fail_count -gt 0 ]; then
+    return 1
+  fi
+}
+
+# Main execution
+main() {
+  # Handle subcommands
+  if [ "${1:-}" = "extract-config" ]; then
+    if [ $# -ne 3 ]; then
+      echo "Usage: $0 extract-config INPUT_FILE OUTPUT_FILE"
+      exit 1
+    fi
+    extract_config_from_file "$2" "$3"
+    echo "Extracted config to $3"
+    exit 0
+  fi
+
+  if [ "${1:-}" = "discover" ]; then
+    discover_repos
+    exit 0
+  fi
+
+  # Handle --dry-run flag
+  if [ "${1:-}" = "--dry-run" ]; then
+    DRY_RUN=true
+    shift
+    echo "Running in DRY-RUN mode"
+    echo ""
+  fi
+
+  # Check if specific repos were provided as arguments
+  local repos
+  if [ $# -gt 0 ]; then
+    # Use provided repos (space-separated arguments become newline-separated)
+    repos=$(printf "%s\n" "$@")
+    echo "Using provided repositories:"
+    echo "$repos"
+    echo ""
+  else
+    # Autodiscover repos
+    echo "Discovering repositories..."
+
+    if ! repos=$(discover_repos); then
+      echo "Failed to discover repositories"
+      exit 1
+    fi
+
+    if [ -z "$repos" ]; then
+      echo "No repositories discovered"
+      exit 0
+    fi
+
+    echo "Discovered $(echo "$repos" | wc -l) repositories"
+    echo ""
+  fi
+
+  process_repos "$repos"
+}
+
+# Run main function
+main "$@"
