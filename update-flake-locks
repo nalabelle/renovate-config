@@ -163,7 +163,7 @@ create_pull_request() {
 EOF
 )
 
-  pr_body=$(echo "$pr_body" | sed "s/BRANCH_NAME/$branch_name/" | sed "s/DEFAULT_BRANCH/$default_branch/")
+  pr_body=$(echo "$pr_body" | sed "s|BRANCH_NAME|$branch_name|" | sed "s|DEFAULT_BRANCH|$default_branch|")
 
   echo "Creating PR..."
   if curl -s --max-time 30 -X POST "$api_url" \
@@ -371,9 +371,9 @@ process_repos() {
     local result=$?
 
     case $result in
-      0) ((success_count++)) ;;
-      1) ((fail_count++)) ;;
-      2) ((skip_count++)) ;;
+      0) success_count=$((success_count + 1)) ;;
+      1) fail_count=$((fail_count + 1)) ;;
+      2) skip_count=$((skip_count + 1)) ;;
     esac
 
     echo ""
