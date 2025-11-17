@@ -50,6 +50,11 @@ parse_git_author() {
   fi
 }
 
+# Get platform from config.js
+get_platform() {
+  grep -E '^\s*"platform":' "$RENOVATE_CONFIG_FILE" | sed 's/.*"platform":\s*"\([^"]*\)".*/\1/'
+}
+
 # Get platform endpoint from config.js
 get_platform_endpoint() {
   grep -E '^\s*"endpoint":' "$RENOVATE_CONFIG_FILE" | sed 's/.*"endpoint":\s*"\([^"]*\)".*/\1/'
@@ -209,14 +214,18 @@ update_repo_flake() {
   extract_config_from_file "$raw_config" "$clean_config"
 
   # Extract settings from config (error if not set)
-  local nix_enabled git_author branch_prefix platform lockfile_branch schedule automerge
+  local nix_enabled git_author branch_prefix lockfile_branch schedule automerge
   nix_enabled=$(get_config_value "$clean_config" '.config.nix.enabled')
   git_author=$(get_config_value "$clean_config" '.config.gitAuthor')
   branch_prefix=$(get_config_value "$clean_config" '.config.branchPrefix')
-  platform=$(get_config_value "$clean_config" '.config.platform')
   lockfile_branch=$(get_config_value "$clean_config" '.config.lockFileMaintenance.branchTopic')
   schedule=$(get_config_value "$clean_config" '.config.schedule[0]')
   automerge=$(get_config_value "$clean_config" '.config.lockFileMaintenance.automerge')
+
+  # Get platform from config.js (not in resolved config)
+  local platform platform_endpoint
+  platform=$(get_platform)
+  platform_endpoint=$(get_platform_endpoint)
 
   # Check if Nix is enabled before cloning
   if [ "$nix_enabled" != "true" ]; then
@@ -229,10 +238,6 @@ update_repo_flake() {
     echo "⊘ Outside schedule for $repo, skipping"
     return 2
   fi
-
-  # Get platform endpoint
-  local platform_endpoint
-  platform_endpoint=$(get_platform_endpoint)
 
   # Clone repo
   if ! git clone "${platform_endpoint}/${repo}" "$repo_dir" 2>/dev/null; then
