@@ -123,9 +123,10 @@ pr_exists() {
   local platform_endpoint="$3"
   local platform="$4"
 
+  echo "Checking for existing PR..."
   local api_url response
   api_url=$(get_api_url "$repo" "$platform_endpoint" "$platform" "pulls-list")
-  response=$(curl -s -H "Authorization: token ${RENOVATE_TOKEN}" "$api_url")
+  response=$(curl -s --max-time 10 -H "Authorization: token ${RENOVATE_TOKEN}" "$api_url")
 
   # Check if any PR exists with this head branch
   if echo "$response" | jq -e ".[] | select(.head.ref == \"$branch_name\")" >/dev/null 2>&1; then
@@ -158,10 +159,16 @@ EOF
 
   pr_body=$(echo "$pr_body" | sed "s/BRANCH_NAME/$branch_name/" | sed "s/DEFAULT_BRANCH/$default_branch/")
 
-  curl -s -X POST "$api_url" \
+  echo "Creating PR..."
+  if curl -s --max-time 30 -X POST "$api_url" \
     -H "Authorization: token ${RENOVATE_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$pr_body" >/dev/null 2>&1
+    -d "$pr_body" >/dev/null 2>&1; then
+    return 0
+  else
+    echo "Warning: PR creation API call failed or timed out" >&2
+    return 1
+  fi
 }
 
 # Discover repositories using Renovate
@@ -323,13 +330,14 @@ update_repo_flake() {
   fi
 
   # Check if PR already exists, create if not
+  echo "Checking/creating PR..."
   if pr_exists "$repo" "$branch_name" "$platform_endpoint" "$platform"; then
     echo "✓ Updated $repo (PR already exists)"
   else
     if create_pull_request "$repo" "$branch_name" "$default_branch" "$platform_endpoint" "$platform"; then
       echo "✓ Updated $repo and created PR"
     else
-      echo "⚠ Pushed $repo but failed to create PR"
+      echo "⚠ Pushed $repo but failed to create PR (continuing anyway)"
     fi
   fi
 
