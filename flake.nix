@@ -41,6 +41,7 @@
             wget
           ];
           text = ''
+            export RENOVATE_CONFIG_FILE="''${RENOVATE_CONFIG_FILE:-config.js}"
             exec ${pkgs.renovate}/bin/renovate "$@"
           '';
         };
@@ -57,7 +58,10 @@
             jq
             nix
           ];
-          text = builtins.readFile ./update-flake-locks;
+          text = ''
+            export RENOVATE_CONFIG_FILE="''${RENOVATE_CONFIG_FILE:-config.js}"
+            ${builtins.readFile ./update-flake-locks}
+          '';
         };
 
         # Run the hooks with `nix fmt`.
