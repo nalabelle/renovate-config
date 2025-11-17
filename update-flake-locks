@@ -253,7 +253,8 @@ update_repo_flake() {
   local branch_name="${branch_prefix}${lockfile_branch}"
 
   # Update flake.lock
-  if ! nix flake update 2>/dev/null; then
+  echo "Updating flake.lock..."
+  if ! nix flake update; then
     echo "✗ Failed to update flake.lock in $repo"
     cd - >/dev/null
     return 1
