@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x
 
 # Update flake.lock files across all autodiscovered repositories
 # This script works around Renovate bug #33991 which prevents digest updates for Nix flakes
