@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
       - name: Update flake locks
-        run: nix develop --command ./update-flake-locks
+        run: nix develop --command bash update-flake-locks
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}

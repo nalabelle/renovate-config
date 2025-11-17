@@ -23,6 +23,43 @@
         };
       in
       {
+        # Wrap renovate with its dependencies
+        packages.renovate-wrapped = pkgs.writeShellApplication {
+          name = "renovate";
+          runtimeInputs = with pkgs; [
+            bash
+            cargo
+            coreutils
+            curl
+            gitMinimal
+            gnumake
+            nix
+            nixos-rebuild
+            nodejs_latest
+            openssh
+            renovate
+            wget
+          ];
+          text = ''
+            exec ${pkgs.renovate}/bin/renovate "$@"
+          '';
+        };
+
+        # Package the update-flake-locks script
+        packages.update-flake-locks = pkgs.writeShellApplication {
+          name = "update-flake-locks";
+          runtimeInputs = with pkgs; [
+            self.packages.${system}.renovate-wrapped
+            bash
+            coreutils
+            curl
+            gitMinimal
+            jq
+            nix
+          ];
+          text = builtins.readFile ./update-flake-locks;
+        };
+
         # Run the hooks with `nix fmt`.
         formatter = (
           let
@@ -139,21 +176,8 @@
             pre-commit
             prettier
 
-            renovate
-
-            # Renovate support tools
-            bash
-            cargo
-            coreutils
-            curl
-            gitMinimal
-            gnumake
-            jq
-            nix
-            nixos-rebuild
-            nodejs_latest
-            openssh
-            wget
+            self.packages.${system}.renovate-wrapped
+            self.packages.${system}.update-flake-locks
           ];
         };
       }
