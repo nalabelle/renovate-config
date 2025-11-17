@@ -249,9 +249,12 @@ update_repo_flake() {
     return 2
   fi
 
-  # Configure git
+  # Configure git with credentials
   git config user.name "$(parse_git_author "$git_author" "name")"
   git config user.email "$(parse_git_author "$git_author" "email")"
+
+  # Set up git credential helper to use token
+  git config credential.helper "!f() { echo \"username=renovate\"; echo \"password=\${RENOVATE_TOKEN}\"; }; f"
 
   # Get default branch
   local default_branch
