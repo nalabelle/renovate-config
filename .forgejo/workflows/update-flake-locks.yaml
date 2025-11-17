@@ -1,20 +1,21 @@
-name: Run Renovate
+name: Update Flake Locks
 
 on:
   workflow_dispatch: {}
   schedule:
+    # Run daily at noon UTC (4 AM Pacific)
     - cron: '0 12 * * *'
 
 jobs:
-  run-renovate:
-    name: Renovate
+  update-flake-locks:
+    name: Update Flake Locks
     runs-on: native
     steps:
       - name: Checkout repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
-      - name: Renovate
-        run: nix run .#renovate-wrapped
+      - name: Update flake locks
+        run: nix run .#update-flake-locks
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
