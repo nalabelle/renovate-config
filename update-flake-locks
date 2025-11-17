@@ -264,9 +264,6 @@ update_repo_flake() {
 
   extract_config_from_file "$raw_config" "$clean_config"
 
-  # Clean up temp files immediately after use
-  rm -f "$raw_config" "$clean_config"
-
   # Extract settings from config (error if not set)
   local nix_enabled git_author branch_prefix lockfile_branch schedule automerge
   nix_enabled=$(get_config_value "$clean_config" '.config.nix.enabled')
@@ -275,6 +272,9 @@ update_repo_flake() {
   lockfile_branch=$(get_config_value "$clean_config" '.config.lockFileMaintenance.branchTopic')
   schedule=$(get_config_value "$clean_config" '.config.schedule[0]')
   automerge=$(get_config_value "$clean_config" '.config.lockFileMaintenance.automerge')
+
+  # Clean up temp files after extracting all values
+  rm -f "$raw_config" "$clean_config"
 
   # Get platform from config.js (not in resolved config)
   local platform platform_endpoint
