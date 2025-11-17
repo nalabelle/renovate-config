@@ -122,24 +122,59 @@ get_api_url() {
   esac
 }
 
-# Check if PR already exists for branch
-pr_exists() {
+# Check if PR already exists for branch and return PR number
+get_existing_pr() {
   local repo="$1"
   local branch_name="$2"
   local platform_endpoint="$3"
   local platform="$4"
 
   echo "Checking for existing PR..."
-  local api_url response
+  local api_url response pr_number
   api_url=$(get_api_url "$repo" "$platform_endpoint" "$platform" "pulls-list")
   response=$(curl -s --max-time 10 -H "Authorization: token ${RENOVATE_TOKEN}" "$api_url")
 
-  # Check if any PR exists with this head branch
-  if echo "$response" | jq -e ".[] | select(.head.ref == \"$branch_name\")" >/dev/null 2>&1; then
-    return 0  # PR exists
+  # Extract PR number if it exists
+  pr_number=$(echo "$response" | jq -r ".[] | select(.head.ref == \"$branch_name\") | .number // .id")
+
+  if [ -n "$pr_number" ] && [ "$pr_number" != "null" ]; then
+    echo "$pr_number"
+    return 0
   else
-    return 1  # No PR
+    return 1
   fi
+}
+
+# Enable automerge on a PR
+enable_pr_automerge() {
+  local repo="$1"
+  local pr_number="$2"
+  local platform_endpoint="$3"
+  local platform="$4"
+
+  echo "Enabling automerge for PR #$pr_number..."
+  local owner repo_name merge_api_url
+  owner=$(echo "$repo" | cut -d'/' -f1)
+  repo_name=$(echo "$repo" | cut -d'/' -f2)
+
+  case "$platform" in
+    forgejo|gitea)
+      # Forgejo/Gitea: PATCH /repos/{owner}/{repo}/pulls/{index}
+      merge_api_url="${platform_endpoint}/api/v1/repos/${owner}/${repo_name}/pulls/${pr_number}"
+      curl -s --max-time 10 -X PATCH "$merge_api_url" \
+        -H "Authorization: token ${RENOVATE_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"merge_when_checks_succeed": true}' >/dev/null 2>&1
+      ;;
+    github)
+      # GitHub: PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge with auto_merge
+      merge_api_url="https://api.github.com/repos/${owner}/${repo_name}/pulls/${pr_number}/merge"
+      curl -s --max-time 10 -X PUT "$merge_api_url" \
+        -H "Authorization: token ${RENOVATE_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"merge_method": "rebase"}' >/dev/null 2>&1
+      ;;
+  esac
 }
 
 # Create a pull request via platform API
@@ -149,8 +184,9 @@ create_pull_request() {
   local default_branch="$3"
   local platform_endpoint="$4"
   local platform="$5"
+  local automerge="$6"
 
-  local api_url pr_body
+  local api_url pr_body pr_number
   api_url=$(get_api_url "$repo" "$platform_endpoint" "$platform" "pulls")
 
   pr_body=$(cat <<'EOF'
@@ -166,15 +202,29 @@ EOF
   pr_body=$(echo "$pr_body" | sed "s|BRANCH_NAME|$branch_name|" | sed "s|DEFAULT_BRANCH|$default_branch|")
 
   echo "Creating PR..."
-  if curl -s --max-time 30 -X POST "$api_url" \
+  local response
+  if ! response=$(curl -s --max-time 30 -X POST "$api_url" \
     -H "Authorization: token ${RENOVATE_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$pr_body" >/dev/null 2>&1; then
-    return 0
-  else
+    -d "$pr_body"); then
     echo "Warning: PR creation API call failed or timed out" >&2
     return 1
   fi
+
+  # Extract PR number from response
+  pr_number=$(echo "$response" | jq -r '.number // .id')
+
+  if [ -z "$pr_number" ] || [ "$pr_number" = "null" ]; then
+    echo "Warning: Could not extract PR number from response" >&2
+    return 1
+  fi
+
+  # Enable automerge if configured
+  if [ "$automerge" = "true" ]; then
+    enable_pr_automerge "$repo" "$pr_number" "$platform_endpoint" "$platform"
+  fi
+
+  return 0
 }
 
 # Discover repositories using Renovate
@@ -203,15 +253,19 @@ update_repo_flake() {
   local raw_config clean_config
   raw_config=$(mktemp)
   clean_config=$(mktemp)
-  trap 'rm -f "$raw_config" "$clean_config"' RETURN
+  # Note: trap cleanup happens automatically when function returns
 
   if ! get_renovate_config "$repo" "$raw_config"; then
     echo "✗ Failed to get Renovate config for $repo"
+    rm -f "$raw_config" "$clean_config"
     cd - >/dev/null 2>&1 || true
     return 1
   fi
 
   extract_config_from_file "$raw_config" "$clean_config"
+
+  # Clean up temp files immediately after use
+  rm -f "$raw_config" "$clean_config"
 
   # Extract settings from config (error if not set)
   local nix_enabled git_author branch_prefix lockfile_branch schedule automerge
@@ -343,11 +397,20 @@ update_repo_flake() {
 
   # Check if PR already exists, create if not
   echo "Checking/creating PR..."
-  if pr_exists "$repo" "$branch_name" "$platform_endpoint" "$platform"; then
-    echo "✓ Updated $repo (PR already exists)"
+  local existing_pr
+  if existing_pr=$(get_existing_pr "$repo" "$branch_name" "$platform_endpoint" "$platform"); then
+    echo "✓ Updated $repo (PR #$existing_pr already exists)"
+    # Enable automerge on existing PR if configured
+    if [ "$automerge" = "true" ]; then
+      enable_pr_automerge "$repo" "$existing_pr" "$platform_endpoint" "$platform"
+    fi
   else
-    if create_pull_request "$repo" "$branch_name" "$default_branch" "$platform_endpoint" "$platform"; then
-      echo "✓ Updated $repo and created PR"
+    if create_pull_request "$repo" "$branch_name" "$default_branch" "$platform_endpoint" "$platform" "$automerge"; then
+      if [ "$automerge" = "true" ]; then
+        echo "✓ Updated $repo and created PR with automerge enabled"
+      else
+        echo "✓ Updated $repo and created PR"
+      fi
     else
       echo "⚠ Pushed $repo but failed to create PR (continuing anyway)"
     fi
