@@ -35,15 +35,30 @@
         "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    },
+    {
+      // Track nixpkgs commits in flake.nix to enable proper updates with lag
+      // Matches: nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"
+      // This allows Renovate to pin commits and apply stabilityDays
+      "customType": "regex",
+      "fileMatch": ["^flake\\.nix$"],
+      "matchStrings": [
+        "(?<depName>\\w+)\\.url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "NixOS/nixpkgs",
+      "packageNameTemplate": "https://github.com/NixOS/nixpkgs",
+      "versioningTemplate": "loose"
     }
   ],
   "postUpdateOptions": ["npmDedupe"],
   "packageRules": [
     {
-      // Renovate is broken for nix: https://github.com/renovatebot/renovate/pull/33991
-      "matchManagers": ["nix"],
-      "matchUpdateTypes": ["digest"],
-      "enabled": false
+      // Add 7-day stability period for nixpkgs updates
+      // Ensures binary caches are available and provides time for community review
+      "matchDatasources": ["git-refs"],
+      "matchPackageNames": ["https://github.com/NixOS/nixpkgs"],
+      "stabilityDays": 7,
     },
     {
       // Add reminder comment for npm packages that need hash updates
