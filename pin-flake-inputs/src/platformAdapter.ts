@@ -54,6 +54,24 @@ export abstract class PlatformAdapter {
   ): Promise<void>;
 
   /**
+   * Close a pull request.
+   */
+  public abstract closePullRequest(
+    repo: string,
+    prNumber: number,
+    token: string
+  ): Promise<void>;
+
+  /**
+   * Delete a branch.
+   */
+  public abstract deleteBranch(
+    repo: string,
+    branchName: string,
+    token: string
+  ): Promise<void>;
+
+  /**
    * Shared HTTP helper for platform adapters: a thin wrapper around fetch
    * with a hard timeout.
    *
@@ -66,7 +84,7 @@ export abstract class PlatformAdapter {
   ): Promise<Response> {
     const { timeoutMs = 10_000, ...rest } = init;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => { controller.abort(); }, timeoutMs);
 
     try {
       const response = await fetch(url, { ...rest, signal: controller.signal });

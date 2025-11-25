@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "npm run lint && vitest run",
     "test:watch": "vitest watch",
     "lint": "eslint . --ext .ts --max-warnings 0",
     "dev": "RENOVATE_CONFIG_FILE=../config.js tsx src/main.ts",
@@ -18,12 +18,11 @@
   },
   "devDependencies": {
     "@types/node": ">=24.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.12.2",
-    "@typescript-eslint/parser": "^8.12.2",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9",
+    "typescript-eslint": "^8.48.0",
     "vitest": "^4.0"
   },
   "dependencies": {

@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
  * because platform/endpoint are not surfaced there.
  */
 
-export type ProviderPlatform = 'github' | 'forgejo' | 'gitea' | string;
+export type ProviderPlatform = 'github' | 'forgejo' | 'gitea';
 
 export interface ProviderConfig {
   readonly platform: ProviderPlatform;
@@ -35,13 +35,13 @@ export interface ProviderConfig {
  */
 function extractStringField(source: string, fieldName: string): string {
   const pattern = new RegExp(`^\\s*"${fieldName}"\\s*:\\s*"([^"]+)"`, 'm');
-  const match = source.match(pattern);
+  const match = pattern.exec(source);
 
-  if (!match) {
+  if (!match?.[1]) {
     throw new Error(`Could not extract "${fieldName}" from provider config`);
   }
 
-  return match[1] as string;
+  return match[1];
 }
 
 /**
@@ -55,7 +55,11 @@ export async function loadProviderConfig(
 ): Promise<ProviderConfig> {
   const raw = await readFile(configPath, 'utf8');
 
-  const platform = extractStringField(raw, 'platform') as ProviderPlatform;
+  const platformStr = extractStringField(raw, 'platform');
+  if (platformStr !== 'github' && platformStr !== 'forgejo' && platformStr !== 'gitea') {
+    throw new Error(`Unsupported platform: ${platformStr}`);
+  }
+  const platform: ProviderPlatform = platformStr;
   const endpoint = extractStringField(raw, 'endpoint');
 
   return {

@@ -36,14 +36,15 @@ async function execLenient(
       const child = execFile(command, args, { cwd: options.cwd, env: options.env }, (error, so, se) => {
         if (error) {
           // Include stdout/stderr in the error for debugging
-          const enrichedError = Object.assign(error, {
-            stdout: String(so),
-            stderr: String(se)
+          const enrichedError = new Error(error.message, { cause: error });
+          Object.assign(enrichedError, {
+            stdout: so,
+            stderr: se
           });
           reject(enrichedError);
           return;
         }
-        resolve({ stdout: String(so), stderr: String(se) });
+        resolve({ stdout: so, stderr: se });
       });
       child.stdin?.end();
     });
@@ -204,11 +205,24 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
 
   const branchName = `${repoConfig.branchPrefix}pin-flake-inputs`;
 
-  // eslint-disable-next-line no-console
-  console.log('Pinning flake inputs from flake.lock...');
+  logger.info('Pinning flake inputs from flake.lock...');
   if (!(await pinFlakeInputs(repoDir))) {
-    // eslint-disable-next-line no-console
-    console.log(`○ No inputs to pin or already pinned in ${repo}`);
+    logger.info({ repo }, 'No inputs to pin or already pinned');
+
+    // Check if there's an existing open PR that should be closed since inputs are already pinned
+    const existing = await adapter.findExistingPullRequest(repo, branchName, token);
+    if (existing != null) {
+      logger.info({ repo, prNumber: existing, branchName, defaultBranch }, 'Closing PR since inputs are already pinned on default branch');
+      await adapter.closePullRequest(repo, existing, token);
+    }
+
+    // Check if the branch exists and delete it since inputs are already pinned on default branch
+    const remoteBranchCheck = await execLenient('git', ['rev-parse', '--verify', `origin/${branchName}`], { cwd: repoDir });
+    if (remoteBranchCheck) {
+      logger.info({ repo, branchName, defaultBranch }, 'Deleting branch since inputs are already pinned on default branch');
+      await adapter.deleteBranch(repo, branchName, token);
+    }
+
     return 2;
   }
 
@@ -230,7 +244,7 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
 
     // Show the diff
     const diffResult = await execLenient('git', ['diff', `origin/${defaultBranch}`, '--', 'flake.nix'], { cwd: repoDir });
-    if (diffResult && diffResult.stdout.trim()) {
+    if (diffResult?.stdout.trim()) {
       // eslint-disable-next-line no-console
       console.log('\nChanges to flake.nix:');
       // eslint-disable-next-line no-console
@@ -302,8 +316,7 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
 
   const existing = await adapter.findExistingPullRequest(repo, branchName, token);
   if (existing != null) {
-    // eslint-disable-next-line no-console
-    console.log(`✓ Updated ${repo} (PR #${existing} already exists)`);
+    logger.info({ repo, prNumber: existing }, 'Updated repository with existing PR');
     if (repoConfig.automerge) {
       await adapter.enableAutomerge(repo, existing, token);
     }
@@ -356,7 +369,9 @@ async function ensureBranchAndCommit(repoDir: string, branchName: string): Promi
 async function runExtractConfig(input: string, output: string): Promise<void> {
   const raw = await readFile(input, 'utf8');
   const extracted = extractResolvedConfig(raw);
-  await rm(output, { force: true }).catch(() => {});
+  await rm(output, { force: true }).catch(() => {
+    // Ignore errors when removing file
+  });
   await writeFile(output, extracted, 'utf8');
   // eslint-disable-next-line no-console
   console.log(`Extracted config to ${output}`);
@@ -390,20 +405,13 @@ async function runBatchUpdate(repos: string[], dryRun: boolean): Promise<ExitCod
       default:
         break;
     }
-    // eslint-disable-next-line no-console
-    console.log('');
+    logger.debug('Completed repository processing');
   }
 
-  // eslint-disable-next-line no-console
-  console.log('=== Summary ===');
-  // eslint-disable-next-line no-console
-  console.log(`Total repositories: ${repos.length}`);
-  // eslint-disable-next-line no-console
-  console.log(`Successfully updated: ${success}`);
-  // eslint-disable-next-line no-console
-  console.log(`Skipped (no flake or no changes): ${skip}`);
-  // eslint-disable-next-line no-console
-  console.log(`Failed: ${fail}`);
+  logger.info(
+    { total: repos.length, success, skip, fail },
+    'Batch update summary'
+  );
 
   return fail > 0 ? 1 : 0;
 }
@@ -450,10 +458,7 @@ export async function main(argv: string[]): Promise<ExitCode> {
           process.exitCode = 0;
           return;
         }
-        // eslint-disable-next-line no-console
-        console.log(`Discovered ${targetRepos.length} repositories`);
-        // eslint-disable-next-line no-console
-        console.log('');
+        logger.info({ count: targetRepos.length }, 'Discovered repositories');
       } else {
         // eslint-disable-next-line no-console
         console.log('Using provided repositories:');
@@ -480,7 +485,6 @@ export async function main(argv: string[]): Promise<ExitCode> {
   return (process.exitCode ?? 0) as ExitCode;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  main(process.argv.slice(2));
+if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
+  void main(process.argv.slice(2));
 }

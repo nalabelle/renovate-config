@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { logger } from './logger.js';
 
 /**
  * Represents a flake input node from flake.lock
@@ -78,6 +79,10 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
     let pinned: PinnedInput;
 
     if (type === 'github' || type === 'gitlab') {
+      // Skip if required fields are missing
+      if (!locked.owner || !locked.repo) {
+        continue;
+      }
       pinned = {
         name: inputName,
         type,
@@ -90,6 +95,10 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
         originalRef: original?.ref ?? locked.ref
       };
     } else if (type === 'git') {
+      // Skip if required url field is missing
+      if (!locked.url) {
+        continue;
+      }
       pinned = {
         name: inputName,
         type,
@@ -118,17 +127,26 @@ function buildRenovateComment(input: PinnedInput, indent: string): string {
   const parts: string[] = [];
 
   if (input.type === 'github') {
+    if (!input.owner || !input.repo) {
+      throw new Error(`GitHub input ${input.name} missing owner or repo`);
+    }
     parts.push(`depName=${input.owner}/${input.repo}`);
     if (input.originalRef) {
       parts.push(`branch=${input.originalRef}`);
     }
   } else if (input.type === 'gitlab') {
+    if (!input.owner || !input.repo || !input.host) {
+      throw new Error(`GitLab input ${input.name} missing owner, repo, or host`);
+    }
     parts.push(`depName=${input.owner}/${input.repo}`);
     if (input.originalRef) {
       parts.push(`branch=${input.originalRef}`);
     }
     parts.push(`host=${input.host}`);
   } else if (input.type === 'git') {
+    if (!input.url) {
+      throw new Error(`Git input ${input.name} missing url`);
+    }
     parts.push(`url=${input.url}`);
     if (input.originalRef) {
       parts.push(`branch=${input.originalRef}`);
@@ -143,15 +161,27 @@ function buildRenovateComment(input: PinnedInput, indent: string): string {
  */
 function buildPinnedUrl(input: PinnedInput): string {
   if (input.type === 'github') {
+    if (!input.owner || !input.repo) {
+      throw new Error(`GitHub input ${input.name} missing owner or repo`);
+    }
     return `github:${input.owner}/${input.repo}/${input.rev}`;
   } else if (input.type === 'gitlab') {
+    if (!input.owner || !input.repo) {
+      throw new Error(`GitLab input ${input.name} missing owner or repo`);
+    }
     return `gitlab:${input.owner}/${input.repo}/${input.rev}`;
   } else if (input.type === 'git') {
     // Use originalUrl if available (preserves git+https:// prefix)
     // Otherwise fall back to locked.url
     const baseUrl = input.originalUrl ?? input.url;
+    if (!baseUrl) {
+      throw new Error(`Git input ${input.name} missing url`);
+    }
     // Remove any existing query parameters before adding rev
-    const cleanUrl = baseUrl?.split('?')[0];
+    const cleanUrl = baseUrl.split('?')[0];
+    if (!cleanUrl) {
+      throw new Error(`Git input ${input.name} has invalid url`);
+    }
     return `${cleanUrl}?rev=${input.rev}`;
   }
   throw new Error(`Unsupported input type: ${input.type}`);
@@ -162,8 +192,13 @@ function buildPinnedUrl(input: PinnedInput): string {
  */
 function isAlreadyPinned(flakeNixContent: string, input: PinnedInput): boolean {
   const pinnedUrl = buildPinnedUrl(input);
-  const pattern = new RegExp(`${input.name}\\.url.*${pinnedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
-  return pattern.test(flakeNixContent);
+  const escapedUrl = pinnedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Check for both simple format (inputName.url = "...") and block format (inputName = { url = "..." })
+  const simplePattern = new RegExp(`${input.name}\\.url\\s*=\\s*"${escapedUrl}"`);
+  const blockPattern = new RegExp(`${input.name}\\s*=\\s*\\{[^}]*url\\s*=\\s*"${escapedUrl}"`, 's');
+
+  return simplePattern.test(flakeNixContent) || blockPattern.test(flakeNixContent);
 }
 
 /**
@@ -202,13 +237,13 @@ export async function pinFlakeInputs(repoDir: string): Promise<boolean> {
     }
 
     if (!match) {
-      // eslint-disable-next-line no-console
-      console.warn(`  ${input.name}: Warning: Not found in flake.nix, skipping`);
+      logger.warn({ inputName: input.name }, 'Input not found in flake.nix, skipping');
       continue;
     }
 
     const indent = match[1] ?? '';
     const pinnedUrl = buildPinnedUrl(input);
+    const beforeContent = flakeNixContent;
 
     if (isBlockFormat) {
       // For block format, find the url line and its indentation within the block
@@ -233,10 +268,11 @@ export async function pinFlakeInputs(repoDir: string): Promise<boolean> {
       flakeNixContent = flakeNixContent.replace(simplePattern, replacement);
     }
 
-    hasChanges = true;
-
-    // eslint-disable-next-line no-console
-    console.log(`  ${input.name}: Pinning to ${input.rev}`);
+    // Only log and mark as changed if content actually changed
+    if (flakeNixContent !== beforeContent) {
+      hasChanges = true;
+      logger.info({ inputName: input.name, rev: input.rev }, 'Pinned flake input');
+    }
   }
 
   if (hasChanges) {

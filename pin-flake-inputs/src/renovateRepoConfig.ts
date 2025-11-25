@@ -54,8 +54,8 @@ async function execChecked(
       }
 
       resolve({
-        stdout: String(stdout),
-        stderr: String(stderr)
+        stdout,
+        stderr
       });
     });
 
@@ -73,8 +73,8 @@ export function extractResolvedConfig(rawOutput: string): string {
 
   let startIndex = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i]!;
-    if (line.startsWith(' INFO: Full resolved config')) {
+    const line = lines[i];
+    if (line?.startsWith(' INFO: Full resolved config')) {
       startIndex = i;
       break;
     }
@@ -85,11 +85,12 @@ export function extractResolvedConfig(rawOutput: string): string {
   }
 
   let endIndex = -1;
+  const logLineRegex = /^\s*(INFO|DEBUG|WARN|ERROR|FATAL):/;
   for (let i = startIndex + 1; i < lines.length; i += 1) {
-    const line = lines[i]!;
+    const line = lines[i];
     // Stop at any log line (INFO, DEBUG, WARN, ERROR, etc.)
     // Log lines may or may not have leading whitespace
-    if (line.match(/^\s*(INFO|DEBUG|WARN|ERROR|FATAL):/)) {
+    if (line && logLineRegex.exec(line)) {
       endIndex = i;
       break;
     }

@@ -38,8 +38,8 @@ async function execChecked(
       }
 
       resolve({
-        stdout: String(stdout),
-        stderr: String(stderr)
+        stdout,
+        stderr
       });
     });
 
@@ -116,7 +116,8 @@ export async function configureGitIdentity(
   token: string
 ): Promise<void> {
   const namePart = gitAuthor.replace(/\s*<.*$/, '');
-  const emailMatch = gitAuthor.match(/<([^>]+)>/);
+  const emailRegex = /<([^>]+)>/;
+  const emailMatch = emailRegex.exec(gitAuthor);
   const email = emailMatch?.[1] ?? '';
 
   await execLenient('git', ['config', 'user.name', namePart], { cwd: repoDir });

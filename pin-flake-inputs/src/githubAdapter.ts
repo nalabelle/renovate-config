@@ -1,4 +1,5 @@
 import { PlatformAdapter, type PullRequestOptions } from './platformAdapter.js';
+import { logger } from './logger.js';
 
 /**
  * GitHub implementation of the PlatformAdapter.
@@ -26,11 +27,11 @@ export class GitHubAdapter extends PlatformAdapter {
       return null;
     }
 
-    const prs = (await response.json()) as Array<{
+    const prs = (await response.json()) as {
       readonly head?: { readonly ref?: string };
       readonly number?: number;
       readonly id?: number;
-    }>;
+    }[];
 
     for (const pr of prs) {
       if (pr.head?.ref === branchName) {
@@ -62,15 +63,15 @@ export class GitHubAdapter extends PlatformAdapter {
         body: options.body
       }),
       timeoutMs: 30_000
-    }).catch(error => {
-      // eslint-disable-next-line no-console
-      console.error(
-        `Warning: GitHub PR creation failed or timed out: ${(error as Error).message}`
+    }).catch((error: unknown) => {
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'GitHub PR creation failed or timed out'
       );
       return null;
     });
 
-    if (!response || !response.ok) {
+    if (!response?.ok) {
       return null;
     }
 
@@ -84,7 +85,7 @@ export class GitHubAdapter extends PlatformAdapter {
     token: string
   ): Promise<void> {
     const { owner, name } = this.splitOwnerRepo(repo);
-    const url = `https://api.github.com/repos/${owner}/${name}/pulls/${prNumber}/merge`;
+    const url = `https://api.github.com/repos/${owner}/${name}/pulls/${String(prNumber)}/merge`;
 
     const response = await this.fetchWithTimeout(url, {
       method: 'PUT',
@@ -95,20 +96,90 @@ export class GitHubAdapter extends PlatformAdapter {
       },
       body: JSON.stringify({ merge_method: 'rebase' }),
       timeoutMs: 10_000
-    }).catch(error => {
-      // eslint-disable-next-line no-console
-      console.error(
-        `Warning: GitHub merge API failed: ${(error as Error).message}`
+    }).catch((error: unknown) => {
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'GitHub merge API failed'
       );
       return null;
     });
 
-    if (!response || !response.ok) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `Warning: GitHub merge API for ${repo} PR #${prNumber} returned ${
-          response?.status ?? 'no-response'
-        }`
+    if (!response?.ok) {
+      logger.warn(
+        {
+          repo,
+          prNumber,
+          status: response?.status !== undefined ? String(response.status) : 'no-response'
+        },
+        'GitHub merge API returned error'
+      );
+    }
+  }
+
+  public async closePullRequest(
+    repo: string,
+    prNumber: number,
+    token: string
+  ): Promise<void> {
+    const { owner, name } = this.splitOwnerRepo(repo);
+    const url = `https://api.github.com/repos/${owner}/${name}/pulls/${String(prNumber)}`;
+
+    const response = await this.fetchWithTimeout(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/vnd.github+json'
+      },
+      body: JSON.stringify({ state: 'closed' }),
+      timeoutMs: 10_000
+    }).catch((error: unknown) => {
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'GitHub PR close failed'
+      );
+      return null;
+    });
+
+    if (!response?.ok) {
+      logger.warn(
+        {
+          repo,
+          prNumber,
+          status: response?.status !== undefined ? String(response.status) : 'no-response'
+        },
+        'GitHub close PR API returned error'
+      );
+    }
+  }
+
+  public async deleteBranch(
+    repo: string,
+    branchName: string,
+    token: string
+  ): Promise<void> {
+    const { owner, name } = this.splitOwnerRepo(repo);
+    const url = `https://api.github.com/repos/${owner}/${name}/git/refs/heads/${branchName}`;
+
+    const response = await this.fetchWithTimeout(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      },
+      timeoutMs: 10_000
+    }).catch((error: unknown) => {
+      logger.warn(
+        { repo, branchName, error },
+        'GitHub branch delete failed'
+      );
+      return null;
+    });
+
+    if (!response?.ok) {
+      logger.warn(
+        { repo, branchName, status: response?.status ?? 'no-response' },
+        'GitHub delete branch API returned error'
       );
     }
   }
