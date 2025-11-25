@@ -27,40 +27,47 @@
       in
       {
         # Package that builds the TypeScript project and exposes a CLI.
-        packages.default = pkgs.buildNpmPackage {
-          pname = "pin-flake-inputs";
-          version = "0.0.0";
+        packages.default =
+          let
+            npmPackage = pkgs.buildNpmPackage {
+              pname = "pin-flake-inputs";
+              version = "0.0.0";
 
-          src = ./.;
+              src = ./.;
 
-          npmDepsHash = "sha256-iebMLB4bMq9QQ9XHGsGff/sDLOUtP5j+dbfzmDELgTA=";
+              npmDepsHash = "sha256-Zsxl/BlONEj+9UuBk+D9bMFYarBw8Cb2YfbweafOh+U=";
 
-          buildInputs = [
-            node
-          ];
+              buildInputs = [ node ];
 
-          npmBuildScript = "build";
+              npmBuildScript = "build";
 
-          installPhase = ''
-            runHook preInstall
+              installPhase = ''
+                runHook preInstall
 
-            mkdir -p "$out/bin"
-            mkdir -p "$out/lib/node_modules/pin-flake-inputs"
+                mkdir -p "$out/lib/node_modules/pin-flake-inputs"
 
-            cp -r dist "$out/lib/node_modules/pin-flake-inputs/"
-            cp -r node_modules "$out/lib/node_modules/pin-flake-inputs/"
-            cp package.json "$out/lib/node_modules/pin-flake-inputs/"
+                cp -r dist "$out/lib/node_modules/pin-flake-inputs/"
+                cp -r node_modules "$out/lib/node_modules/pin-flake-inputs/"
+                cp package.json "$out/lib/node_modules/pin-flake-inputs/"
 
-            cat >"$out/bin/pin-flake-inputs" <<EOF
-            #!${pkgs.bash}/bin/bash
-            exec ${node}/bin/node "$out/lib/node_modules/pin-flake-inputs/dist/main.js" "\$@"
-            EOF
-
-            chmod +x "$out/bin/pin-flake-inputs"
-
-            runHook postInstall
-          '';
-        };
+                runHook postInstall
+              '';
+            };
+          in
+          pkgs.writeShellApplication {
+            name = "pin-flake-inputs";
+            runtimeInputs = with pkgs; [
+              bash
+              coreutils
+              gitMinimal
+              nix
+              node
+              renovate
+            ];
+            text = ''
+              exec ${node}/bin/node "${npmPackage}/lib/node_modules/pin-flake-inputs/dist/main.js" "$@"
+            '';
+          };
 
         apps.default = {
           type = "app";

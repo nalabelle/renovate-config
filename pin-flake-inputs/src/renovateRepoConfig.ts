@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { logger } from './logger.js';
 
 export interface RepoRenovateConfig {
   readonly nixEnabled: boolean;
@@ -86,7 +87,9 @@ export function extractResolvedConfig(rawOutput: string): string {
   let endIndex = -1;
   for (let i = startIndex + 1; i < lines.length; i += 1) {
     const line = lines[i]!;
-    if (line.startsWith(' INFO:')) {
+    // Stop at any log line (INFO, DEBUG, WARN, ERROR, etc.)
+    // Log lines may or may not have leading whitespace
+    if (line.match(/^\s*(INFO|DEBUG|WARN|ERROR|FATAL):/)) {
       endIndex = i;
       break;
     }
@@ -124,6 +127,16 @@ async function getResolvedConfigRaw(repo: string): Promise<RenovateResolvedConfi
   try {
     parsed = JSON.parse(jsonText);
   } catch (error) {
+    logger.error(
+      {
+        repo,
+        jsonLength: jsonText.length,
+        jsonStart: jsonText.substring(0, 500),
+        jsonEnd: jsonText.substring(Math.max(0, jsonText.length - 500)),
+        error: (error as Error).message
+      },
+      'Failed to parse resolved Renovate config JSON'
+    );
     throw new Error(`Failed to parse resolved Renovate config JSON: ${(error as Error).message}`);
   }
 

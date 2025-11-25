@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "commander": "^14.0.2",
-    "croner": "^9.1.0"
+    "croner": "^9.1.0",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2"
   }
 }

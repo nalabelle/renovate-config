@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { Cron } from 'croner';
+import { logger } from './logger.js';
 import { loadProviderConfig } from './renovateProviderConfig.js';
 import { extractResolvedConfig, loadRepoConfig } from './renovateRepoConfig.js';
 import {
@@ -34,7 +35,12 @@ async function execLenient(
     const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       const child = execFile(command, args, { cwd: options.cwd, env: options.env }, (error, so, se) => {
         if (error) {
-          reject(error);
+          // Include stdout/stderr in the error for debugging
+          const enrichedError = Object.assign(error, {
+            stdout: String(so),
+            stderr: String(se)
+          });
+          reject(enrichedError);
           return;
         }
         resolve({ stdout: String(so), stderr: String(se) });
@@ -43,7 +49,8 @@ async function execLenient(
     });
 
     return { stdout, stderr };
-  } catch {
+  } catch (error) {
+    logger.debug({ error, command, args }, 'Command execution failed');
     return null;
   }
 }
@@ -94,6 +101,8 @@ async function discoverRepos(): Promise<string[]> {
   const tempDir = await mkdtemp(join(tmpdir(), 'update-flake-locks-discover-'));
   const reposFile = join(tempDir, 'repos.json');
 
+  logger.debug({ tempDir, reposFile }, 'Starting repository discovery');
+
   try {
     const result = await execLenient(
       'renovate',
@@ -105,12 +114,19 @@ async function discoverRepos(): Promise<string[]> {
     );
 
     if (!result) {
+      logger.error('renovate --autodiscover command failed');
+      logger.error('Ensure RENOVATE_TOKEN and RENOVATE_CONFIG_FILE are set correctly');
       return [];
     }
 
+    logger.debug({ stdout: result.stdout, stderr: result.stderr }, 'renovate command output');
+
     const raw = await readFile(reposFile, 'utf8');
     const parsed = JSON.parse(raw) as readonly string[];
-    return parsed.map(repo => repo.trim()).filter(Boolean);
+    const repos = parsed.map(repo => repo.trim()).filter(Boolean);
+
+    logger.info({ count: repos.length }, 'Discovered repositories');
+    return repos;
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -257,8 +273,9 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
   }
 
   // Check if the remote branch already exists with the same changes
-  const remoteBranchExists = await execLenient('git', ['rev-parse', `origin/${branchName}`], { cwd: repoDir });
-  if (remoteBranchExists) {
+  const remoteBranchCheck = await execLenient('git', ['rev-parse', '--verify', `origin/${branchName}`], { cwd: repoDir });
+  if (remoteBranchCheck) {
+    logger.debug({ repo, branchName }, 'Remote branch exists, checking for differences');
     const diffVsRemoteBranch = await execLenient('git', ['diff', '--quiet', `origin/${branchName}`], { cwd: repoDir });
     if (diffVsRemoteBranch) {
       // No diff means the remote branch already has these exact changes
@@ -266,6 +283,8 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
       console.log(`○ Remote branch ${branchName} already has these changes in ${repo}`);
       return 2;
     }
+  } else {
+    logger.debug({ repo, branchName }, 'Remote branch does not exist, will create new branch');
   }
 
   // eslint-disable-next-line no-console
