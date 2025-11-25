@@ -35,7 +35,7 @@
 
               src = ./.;
 
-              npmDepsHash = "sha256-Zsxl/BlONEj+9UuBk+D9bMFYarBw8Cb2YfbweafOh+U=";
+              npmDepsHash = "sha256-g1agFCCJDGOPNVJZjM9y6PffZxtJA5jXoUMCgCHnvOI=";
 
               buildInputs = [ node ];
 
