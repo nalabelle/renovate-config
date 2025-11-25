@@ -165,11 +165,45 @@ export class ForgejoAdapter extends PlatformAdapter {
     }
   }
 
+  public async branchExists(
+    repo: string,
+    branchName: string,
+    token: string
+  ): Promise<boolean> {
+    const { owner, name } = this.splitOwnerRepo(repo);
+    const url = `${this.endpoint}/api/v1/repos/${owner}/${name}/branches/${branchName}`;
+
+    const response = await this.fetchWithTimeout(url, {
+      headers: {
+        Authorization: `token ${token}`
+      },
+      timeoutMs: 10_000
+    }).catch((error: unknown) => {
+      logger.debug(
+        { repo, branchName, error },
+        'Forgejo branch existence check failed'
+      );
+      return null;
+    });
+
+    return response?.ok === true;
+  }
+
   public async deleteBranch(
     repo: string,
     branchName: string,
     token: string
   ): Promise<void> {
+    // Check if branch exists before attempting to delete
+    const exists = await this.branchExists(repo, branchName, token);
+    if (!exists) {
+      logger.debug(
+        { repo, branchName },
+        'Branch does not exist on remote, skipping deletion'
+      );
+      return;
+    }
+
     const { owner, name } = this.splitOwnerRepo(repo);
     const url = `${this.endpoint}/api/v1/repos/${owner}/${name}/branches/${branchName}`;
 

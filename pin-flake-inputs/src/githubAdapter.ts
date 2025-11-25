@@ -212,11 +212,46 @@ export class GitHubAdapter extends PlatformAdapter {
     }
   }
 
+  public async branchExists(
+    repo: string,
+    branchName: string,
+    token: string
+  ): Promise<boolean> {
+    const { owner, name } = this.splitOwnerRepo(repo);
+    const url = `https://api.github.com/repos/${owner}/${name}/git/refs/heads/${branchName}`;
+
+    const response = await this.fetchWithTimeout(url, {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      },
+      timeoutMs: 10_000
+    }).catch((error: unknown) => {
+      logger.debug(
+        { repo, branchName, error },
+        'GitHub branch existence check failed'
+      );
+      return null;
+    });
+
+    return response?.ok === true;
+  }
+
   public async deleteBranch(
     repo: string,
     branchName: string,
     token: string
   ): Promise<void> {
+    // Check if branch exists before attempting to delete
+    const exists = await this.branchExists(repo, branchName, token);
+    if (!exists) {
+      logger.debug(
+        { repo, branchName },
+        'Branch does not exist on remote, skipping deletion'
+      );
+      return;
+    }
+
     const { owner, name } = this.splitOwnerRepo(repo);
     const url = `https://api.github.com/repos/${owner}/${name}/git/refs/heads/${branchName}`;
 

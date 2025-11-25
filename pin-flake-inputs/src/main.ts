@@ -234,13 +234,10 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
       await adapter.closePullRequest(repo, existing, token);
     }
 
-    // Check if the branch exists and delete it since inputs are already pinned on default branch
-    // Note: execLenient will return null if branch doesn't exist, which is fine - nothing to delete
-    const remoteBranchCheck = await execLenient('git', ['rev-parse', '--verify', `origin/${branchName}`], { cwd: repoDir });
-    if (remoteBranchCheck) {
-      logger.info({ repo, branchName, defaultBranch }, 'Deleting branch since inputs are already pinned on default branch');
-      await adapter.deleteBranch(repo, branchName, token);
-    }
+    // Delete the branch if it exists on the remote since inputs are already pinned on default branch
+    // The adapter will check if the branch exists before attempting deletion
+    logger.info({ repo, branchName, defaultBranch }, 'Deleting branch since inputs are already pinned on default branch');
+    await adapter.deleteBranch(repo, branchName, token);
 
     return 2;
   }

@@ -63,6 +63,16 @@ export abstract class PlatformAdapter {
   ): Promise<void>;
 
   /**
+   * Check if a branch exists on the remote.
+   * Returns true if the branch exists, false otherwise.
+   */
+  public abstract branchExists(
+    repo: string,
+    branchName: string,
+    token: string
+  ): Promise<boolean>;
+
+  /**
    * Delete a branch.
    */
   public abstract deleteBranch(
