@@ -38,12 +38,21 @@
     },
     {
       // Track nixpkgs commits in flake.nix to enable proper updates with lag
-      // Matches: nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"
+      // Matches three formats:
+      // 1. Simple: nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"
+      // 2. With comment: # renovate: depName=NixOS/nixpkgs branch=nixos-unstable
+      //                  nixpkgs.url = "github:NixOS/nixpkgs/c5ae371..."
+      // 3. Block format: inputName = { url = "github:NixOS/nixpkgs/..."; ... };
       // This allows Renovate to pin commits and apply stabilityDays
+      // Note: This only tracks NixOS/nixpkgs. Other flake inputs are handled by
+      // the native Nix manager or pin-flake-inputs tool.
       "customType": "regex",
       "fileMatch": ["^flake\\.nix$"],
       "matchStrings": [
-        "(?<depName>\\w+)\\.url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\""
+        "#\\s*renovate:.*?\\n\\s*(?<depName>\\w+)\\.url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\"",
+        "#\\s*renovate:.*?\\n\\s*url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\"",
+        "(?<depName>\\w+)\\.url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\"",
+        "(?<depName>\\w+)\\s*=\\s*\\{[^}]*url\\s*=\\s*\"github:NixOS/nixpkgs/(?<currentValue>[^\"]+)\""
       ],
       "datasourceTemplate": "git-refs",
       "depNameTemplate": "NixOS/nixpkgs",

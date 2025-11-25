@@ -131,7 +131,7 @@ function buildRenovateComment(input: PinnedInput, indent: string): string {
     }
   }
 
-  return `${indent}// renovate: ${parts.join(' ')}`;
+  return `${indent}# renovate: ${parts.join(' ')}`;
 }
 
 /**
