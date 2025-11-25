@@ -19,3 +19,4 @@ jobs:
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
+          RENOVATE_CONFIG_FILE: config.js
