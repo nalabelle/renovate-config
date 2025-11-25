@@ -47,15 +47,6 @@
           '';
         };
 
-        # TypeScript implementation of pin-flake-inputs
-        packages.pin-flake-inputs = inputs.pin-flake-inputs.packages.${system}.default;
-
-        # App for running pin-flake-inputs
-        apps.pin-flake-inputs = {
-          type = "app";
-          program = "${self.packages.${system}.pin-flake-inputs}/bin/pin-flake-inputs";
-        };
-
         # Run the hooks with `nix fmt`.
         formatter = (
           let
@@ -171,10 +162,8 @@
           buildInputs = with pkgs; [
             pre-commit
             prettier
-            (inputs.pin-flake-inputs.devTools.${system}.node)
 
             self.packages.${system}.renovate-wrapped
-            self.packages.${system}.pin-flake-inputs
           ];
         };
       }
