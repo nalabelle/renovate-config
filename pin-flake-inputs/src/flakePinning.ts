@@ -16,6 +16,7 @@ interface FlakeLockNode {
   };
   readonly original?: {
     readonly ref?: string;
+    readonly url?: string;
   };
 }
 
@@ -41,6 +42,7 @@ interface PinnedInput {
   readonly repo: string | undefined;
   readonly host: string | undefined;
   readonly url: string | undefined;
+  readonly originalUrl: string | undefined;
   readonly originalRef: string | undefined;
 }
 
@@ -84,6 +86,7 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
         repo: locked.repo,
         host: type === 'gitlab' ? (locked.host ?? 'gitlab.com') : undefined,
         url: undefined,
+        originalUrl: undefined,
         originalRef: original?.ref ?? locked.ref
       };
     } else if (type === 'git') {
@@ -95,6 +98,7 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
         repo: undefined,
         host: undefined,
         url: locked.url,
+        originalUrl: original?.url,
         originalRef: original?.ref ?? locked.ref
       };
     } else {
@@ -143,7 +147,12 @@ function buildPinnedUrl(input: PinnedInput): string {
   } else if (input.type === 'gitlab') {
     return `gitlab:${input.owner}/${input.repo}/${input.rev}`;
   } else if (input.type === 'git') {
-    return `${input.url}?rev=${input.rev}`;
+    // Use originalUrl if available (preserves git+https:// prefix)
+    // Otherwise fall back to locked.url
+    const baseUrl = input.originalUrl ?? input.url;
+    // Remove any existing query parameters before adding rev
+    const cleanUrl = baseUrl?.split('?')[0];
+    return `${cleanUrl}?rev=${input.rev}`;
   }
   throw new Error(`Unsupported input type: ${input.type}`);
 }
