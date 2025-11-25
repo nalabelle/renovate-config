@@ -1,0 +1,33 @@
+{
+  "name": "pin-flake-inputs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pin Nix flake inputs to commits from flake.lock for Renovate tracking",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "lint": "eslint . --ext .ts --max-warnings 0",
+    "dev": "RENOVATE_CONFIG_FILE=../config.js tsx src/main.ts",
+    "dev:dry": "RENOVATE_CONFIG_FILE=../config.js tsx src/main.ts --dry-run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.12.2",
+    "@typescript-eslint/parser": "^8.12.2",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "croner": "^9.1.0"
+  }
+}

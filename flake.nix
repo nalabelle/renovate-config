@@ -5,6 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     git-hooks.url = "github:cachix/git-hooks.nix";
+    pin-flake-inputs.url = "path:./pin-flake-inputs";
   };
 
   outputs =
@@ -46,22 +47,13 @@
           '';
         };
 
-        # Package the update-flake-locks script
-        packages.update-flake-locks = pkgs.writeShellApplication {
-          name = "update-flake-locks";
-          runtimeInputs = with pkgs; [
-            self.packages.${system}.renovate-wrapped
-            bash
-            coreutils
-            curl
-            gitMinimal
-            jq
-            nix
-          ];
-          text = ''
-            export RENOVATE_CONFIG_FILE="''${RENOVATE_CONFIG_FILE:-config.js}"
-            ${builtins.readFile ./update-flake-locks}
-          '';
+        # TypeScript implementation of pin-flake-inputs
+        packages.pin-flake-inputs = inputs.pin-flake-inputs.packages.${system}.default;
+
+        # App for running pin-flake-inputs
+        apps.pin-flake-inputs = {
+          type = "app";
+          program = "${self.packages.${system}.pin-flake-inputs}/bin/pin-flake-inputs";
         };
 
         # Run the hooks with `nix fmt`.
@@ -179,9 +171,10 @@
           buildInputs = with pkgs; [
             pre-commit
             prettier
+            (inputs.pin-flake-inputs.devTools.${system}.node)
 
             self.packages.${system}.renovate-wrapped
-            self.packages.${system}.update-flake-locks
+            self.packages.${system}.pin-flake-inputs
           ];
         };
       }

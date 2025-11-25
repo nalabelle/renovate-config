@@ -1,4 +1,4 @@
-name: Update Flake Locks
+name: Pin Flake Inputs
 
 on:
   workflow_dispatch: {}
@@ -7,15 +7,15 @@ on:
     - cron: '0 12 * * *'
 
 jobs:
-  update-flake-locks:
-    name: Update Flake Locks
+  pin-flake-inputs:
+    name: Pin Flake Inputs
     runs-on: native
     steps:
       - name: Checkout repository
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
 
-      - name: Update flake locks
-        run: nix run .#update-flake-locks
+      - name: Pin flake inputs
+        run: nix run .#pin-flake-inputs
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
