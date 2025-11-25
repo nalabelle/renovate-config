@@ -23,5 +23,12 @@ export default tseslint.config(
       // Project-specific tweaks on top of the recommended strict configs.
       'no-console': 'error'
     }
+  },
+  {
+    files: ['src/**/*.test.ts'],
+    rules: {
+      // Allow non-null assertions in test files
+      '@typescript-eslint/no-non-null-assertion': 'off'
+    }
   }
 );

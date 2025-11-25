@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
@@ -396,5 +396,27 @@ describe('pinFlakeInputs', () => {
 
     // Should not log "Pinned flake input"
     expect(vi.mocked(logger.info)).toHaveBeenCalledTimes(0);
+  });
+
+  it('correctly pins multiple block-format inputs from real music flake', async () => {
+    // Copy fixtures to test directory
+    const fixturesDir = join(import.meta.dirname, 'fixtures', 'music-flake');
+    const flakeLockContent = await readFile(join(fixturesDir, 'flake.lock'), 'utf8');
+    const flakeNixContent = await readFile(join(fixturesDir, 'flake.nix'), 'utf8');
+    const expectedContent = await readFile(join(fixturesDir, 'flake-expected.nix'), 'utf8');
+
+    await writeFile(join(testDir, 'flake.lock'), flakeLockContent);
+    await writeFile(join(testDir, 'flake.nix'), flakeNixContent);
+
+    const result = await pinFlakeInputs(testDir);
+
+    // Should return true (changes made)
+    expect(result).toBe(true);
+
+    // Read the updated flake.nix
+    const updatedFlakeNix = await readFile(join(testDir, 'flake.nix'), 'utf8');
+
+    // Should match expected output exactly
+    expect(updatedFlakeNix).toBe(expectedContent);
   });
 });

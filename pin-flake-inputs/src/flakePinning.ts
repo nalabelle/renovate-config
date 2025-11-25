@@ -188,15 +188,36 @@ function buildPinnedUrl(input: PinnedInput): string {
 }
 
 /**
+ * Escape a string for use in a regular expression
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Build regex pattern for matching a block-format input
+ * Matches: inputName = { ... };
+ */
+function buildBlockPattern(inputName: string): string {
+  const escaped = escapeRegex(inputName);
+  return `${escaped}\\s*=\\s*\\{[\\s\\S]*?^\\s*\\};`;
+}
+
+/**
  * Check if an input is already pinned in flake.nix
  */
 function isAlreadyPinned(flakeNixContent: string, input: PinnedInput): boolean {
   const pinnedUrl = buildPinnedUrl(input);
-  const escapedUrl = pinnedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedUrl = escapeRegex(pinnedUrl);
+  const escapedInputName = escapeRegex(input.name);
 
   // Check for both simple format (inputName.url = "...") and block format (inputName = { url = "..." })
-  const simplePattern = new RegExp(`${input.name}\\.url\\s*=\\s*"${escapedUrl}"`);
-  const blockPattern = new RegExp(`${input.name}\\s*=\\s*\\{[^}]*url\\s*=\\s*"${escapedUrl}"`, 's');
+  const simplePattern = new RegExp(`${escapedInputName}\\.url\\s*=\\s*"${escapedUrl}"`);
+  // For block format, check if the pinned URL appears anywhere in the input's block
+  const blockPattern = new RegExp(
+    `${escapedInputName}\\s*=\\s*\\{[\\s\\S]*?url\\s*=\\s*"${escapedUrl}"[\\s\\S]*?\\};`,
+    'm'
+  );
 
   return simplePattern.test(flakeNixContent) || blockPattern.test(flakeNixContent);
 }
@@ -224,8 +245,11 @@ export async function pinFlakeInputs(repoDir: string): Promise<boolean> {
     // Find the current URL line for this input - handle both formats:
     // 1. Simple: inputName.url = "...";
     // 2. Block:  inputName = { url = "..."; ... };
-    const simplePattern = new RegExp(`^(\\s*)${input.name}\\.url\\s*=.*$`, 'gm');
-    const blockPattern = new RegExp(`^(\\s*)${input.name}\\s*=\\s*\\{[^}]*url\\s*=.*$`, 'gms');
+    // IMPORTANT: Create new RegExp objects for each input to avoid state issues
+    const escapedInputName = escapeRegex(input.name);
+    const simplePattern = new RegExp(`^(\\s*)${escapedInputName}\\.url\\s*=.*$`, 'gm');
+    // For block format, match the entire block including closing brace
+    const blockPattern = new RegExp(`^(\\s*)${buildBlockPattern(input.name)}`, 'gm');
 
     let match = simplePattern.exec(flakeNixContent);
     let isBlockFormat = false;
@@ -259,13 +283,23 @@ export async function pinFlakeInputs(repoDir: string): Promise<boolean> {
 
         // Replace just the url line within the matched block
         const newBlockContent = blockContent.replace(urlLinePattern, urlReplacement);
-        flakeNixContent = flakeNixContent.replace(blockContent, newBlockContent);
+        // Use the match index to replace at the exact position
+        const matchIndex = match.index;
+        flakeNixContent =
+          flakeNixContent.slice(0, matchIndex) +
+          newBlockContent +
+          flakeNixContent.slice(matchIndex + blockContent.length);
       }
     } else {
-      // For simple format, replace the entire line
+      // For simple format, use match index for precise replacement
       const renovateComment = buildRenovateComment(input, indent);
       const replacement = `${renovateComment}\n${indent}${input.name}.url = "${pinnedUrl}";`;
-      flakeNixContent = flakeNixContent.replace(simplePattern, replacement);
+      const matchIndex = match.index;
+      const matchedLine = match[0];
+      flakeNixContent =
+        flakeNixContent.slice(0, matchIndex) +
+        replacement +
+        flakeNixContent.slice(matchIndex + matchedLine.length);
     }
 
     // Only log and mark as changed if content actually changed
