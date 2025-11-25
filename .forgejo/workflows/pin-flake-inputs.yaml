@@ -16,7 +16,8 @@ jobs:
 
       - name: Pin flake inputs
         run: nix run .#pin-flake-inputs
+        working-directory: ${{ github.workspace }}
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
-          RENOVATE_CONFIG_FILE: config.js
+          RENOVATE_CONFIG_FILE: ${{ github.workspace }}/config.js
