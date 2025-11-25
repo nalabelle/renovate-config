@@ -163,7 +163,9 @@ function buildRenovateComment(input: PinnedInput, indent: string): string {
     }
   }
 
-  return `${indent}# renovate: ${parts.join(' ')}`;
+  // Use plain comment without 'renovate:' prefix to avoid confusing Renovate's native Nix manager
+  // This preserves human-readable information while letting the native manager handle updates
+  return `${indent}# ${parts.join(' ')}`;
 }
 
 /**
@@ -249,6 +251,23 @@ export async function pinFlakeInputs(repoDir: string): Promise<boolean> {
   const flakeNixPath = join(repoDir, 'flake.nix');
   let flakeNixContent = await readFile(flakeNixPath, 'utf8');
   let hasChanges = false;
+
+  // Fix any existing 'renovate:' prefixes in comments
+  // This prevents Renovate's native Nix manager from getting confused
+  // TODO: Remove this migration code after 2025-12-02
+  const migrationDeadline = new Date('2025-12-02T00:00:00Z');
+  if (new Date() > migrationDeadline) {
+    throw new Error(
+      'Migration code for renovate: prefix removal has expired. ' +
+      'Please remove this code block from pinFlakeInputs function.'
+    );
+  }
+  const beforeFix = flakeNixContent;
+  flakeNixContent = flakeNixContent.replace(/^(\s*#\s*)renovate:\s+/gm, '$1');
+  if (flakeNixContent !== beforeFix) {
+    hasChanges = true;
+    logger.info('Fixed existing renovate: prefixes in comments');
+  }
 
   for (const input of pinnableInputs) {
     if (isAlreadyPinned(flakeNixContent, input)) {

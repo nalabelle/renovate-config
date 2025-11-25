@@ -246,7 +246,7 @@ describe('pinFlakeInputs', () => {
     // Create a flake.nix that already has the input pinned
     const flakeNix = `{
   inputs = {
-    # renovate: depName=NixOS/nixpkgs branch=nixos-unstable
+    # depName=NixOS/nixpkgs branch=nixos-unstable
     nixpkgs.url = "github:NixOS/nixpkgs/abc123def456";
   };
 }`;
@@ -337,7 +337,7 @@ describe('pinFlakeInputs', () => {
     // (this tests the case where isAlreadyPinned might fail but the replacement is idempotent)
     const flakeNix = `{
   inputs = {
-    # renovate: depName=NixOS/nixpkgs branch=nixos-unstable
+    # depName=NixOS/nixpkgs branch=nixos-unstable
     nixpkgs.url = "github:NixOS/nixpkgs/abc123def456";
   };
 }`;
@@ -382,7 +382,7 @@ describe('pinFlakeInputs', () => {
     const flakeNix = `{
   inputs = {
     dotfiles = {
-      # renovate: depName=nalabelle/dotfiles branch=main
+      # depName=nalabelle/dotfiles branch=main
       url = "github:nalabelle/dotfiles/1ff3798f4b98e6db8f36ac9e975a4a1b4cc02959";
       inputs.nixpkgs.follows = "nixpkgs";
     };
