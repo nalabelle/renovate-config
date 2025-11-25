@@ -2,12 +2,9 @@
   description = "Infrastructure development environment";
 
   inputs = {
-    # depName=NixOS/nixpkgs branch=nixos-unstable
-    nixpkgs.url = "github:NixOS/nixpkgs/c5ae371f1a6a7fd27823bc500d9390b38c05fa55";
-    # depName=numtide/flake-utils
-    flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
-    # depName=cachix/git-hooks.nix
-    git-hooks.url = "github:cachix/git-hooks.nix/7275fa67fbbb75891c16d9dee7d88e58aea2d761";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    git-hooks.url = "github:cachix/git-hooks.nix";
     pin-flake-inputs.url = "path:./pin-flake-inputs";
   };
 
