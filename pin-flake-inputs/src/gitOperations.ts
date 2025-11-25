@@ -76,13 +76,20 @@ export function makeRepoWorkdir(repo: string): string {
 export async function cloneRepo(endpoint: string, repo: string, repoDir: string): Promise<boolean> {
   // Check if directory exists and is a git repo
   if (existsSync(join(repoDir, '.git'))) {
-    // Try to reuse existing clone by fetching and resetting
+    // Try to reuse existing clone by fetching and checking out the default branch
     const fetch = await execLenient('git', ['fetch', '--all'], { cwd: repoDir });
     if (fetch) {
-      const reset = await execLenient('git', ['reset', '--hard', 'origin/HEAD'], { cwd: repoDir });
-      const clean = await execLenient('git', ['clean', '-fdx'], { cwd: repoDir });
-      if (reset && clean) {
-        return true;
+      // Get the default branch name
+      const originHead = await execLenient('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], { cwd: repoDir });
+      if (originHead) {
+        const defaultBranch = originHead.stdout.trim().replace(/^refs\/remotes\/origin\//, '');
+        // Checkout and reset to the default branch
+        const checkout = await execLenient('git', ['checkout', defaultBranch], { cwd: repoDir });
+        const reset = await execLenient('git', ['reset', '--hard', `origin/${defaultBranch}`], { cwd: repoDir });
+        const clean = await execLenient('git', ['clean', '-fdx'], { cwd: repoDir });
+        if (checkout && reset && clean) {
+          return true;
+        }
       }
     }
     // If reuse failed, clean up and fall through to fresh clone
