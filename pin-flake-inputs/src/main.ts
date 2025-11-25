@@ -51,7 +51,19 @@ async function execLenient(
 
     return { stdout, stderr };
   } catch (error) {
-    logger.debug({ error, command, args }, 'Command execution failed');
+    // Check if this is an expected "branch doesn't exist" error
+    const isExpectedBranchError =
+      command === 'git' &&
+      args[0] === 'rev-parse' &&
+      args[1] === '--verify' &&
+      error instanceof Error &&
+      'stderr' in error &&
+      typeof error.stderr === 'string' &&
+      error.stderr.includes('Needed a single revision');
+
+    if (!isExpectedBranchError) {
+      logger.debug({ error, command, args }, 'Command execution failed');
+    }
     return null;
   }
 }
@@ -217,6 +229,7 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
     }
 
     // Check if the branch exists and delete it since inputs are already pinned on default branch
+    // Note: execLenient will return null if branch doesn't exist, which is fine - nothing to delete
     const remoteBranchCheck = await execLenient('git', ['rev-parse', '--verify', `origin/${branchName}`], { cwd: repoDir });
     if (remoteBranchCheck) {
       logger.info({ repo, branchName, defaultBranch }, 'Deleting branch since inputs are already pinned on default branch');
@@ -293,8 +306,7 @@ async function updateRepo(repo: string, dryRun: boolean): Promise<ExitCode> {
     const diffVsRemoteBranch = await execLenient('git', ['diff', '--quiet', `origin/${branchName}`], { cwd: repoDir });
     if (diffVsRemoteBranch) {
       // No diff means the remote branch already has these exact changes
-      // eslint-disable-next-line no-console
-      console.log(`○ Remote branch ${branchName} already has these changes in ${repo}`);
+      logger.info({ repo, branchName }, 'Remote branch already has these changes');
       return 2;
     }
   } else {
