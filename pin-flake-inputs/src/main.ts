@@ -51,7 +51,7 @@ async function execLenient(
 
     return { stdout, stderr };
   } catch (error) {
-    // Check if this is an expected "branch doesn't exist" error
+    // Check if this is an expected error that we shouldn't log
     const isExpectedBranchError =
       command === 'git' &&
       args[0] === 'rev-parse' &&
@@ -61,7 +61,13 @@ async function execLenient(
       typeof error.stderr === 'string' &&
       error.stderr.includes('Needed a single revision');
 
-    if (!isExpectedBranchError) {
+    // git diff --quiet returns exit code 1 when there ARE differences (expected)
+    const isExpectedDiffResult =
+      command === 'git' &&
+      args[0] === 'diff' &&
+      args[1] === '--quiet';
+
+    if (!isExpectedBranchError && !isExpectedDiffResult) {
       logger.debug({ error, command, args }, 'Command execution failed');
     }
     return null;
