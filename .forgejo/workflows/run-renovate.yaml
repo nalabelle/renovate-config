@@ -1,7 +1,18 @@
 name: Run Renovate
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: 'Log level for Renovate'
+        required: false
+        default: 'info'
+        type: choice
+        options:
+          - debug
+          - info
+          - warn
+          - error
   schedule:
     - cron: '0 12 * * *'
 
@@ -18,3 +29,4 @@ jobs:
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}

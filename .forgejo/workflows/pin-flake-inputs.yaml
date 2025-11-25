@@ -1,7 +1,18 @@
 name: Pin Flake Inputs
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: 'Log level for pin-flake-inputs'
+        required: false
+        default: 'info'
+        type: choice
+        options:
+          - debug
+          - info
+          - warn
+          - error
   schedule:
     # Run daily at noon UTC (4 AM Pacific)
     - cron: '0 12 * * *'
@@ -21,3 +32,4 @@ jobs:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RENOVATE_GITHUB_TOKEN }}
           RENOVATE_CONFIG_FILE: ${{ github.workspace }}/config.js
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
