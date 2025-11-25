@@ -95,10 +95,14 @@ async function discoverRepos(): Promise<string[]> {
   const reposFile = join(tempDir, 'repos.json');
 
   try {
-    const result = await execLenient('renovate', [
-      '--autodiscover',
-      `--write-discovered-repos=${reposFile}`
-    ]);
+    const result = await execLenient(
+      'renovate',
+      [
+        '--autodiscover',
+        `--write-discovered-repos=${reposFile}`
+      ],
+      { env: process.env }
+    );
 
     if (!result) {
       return [];
