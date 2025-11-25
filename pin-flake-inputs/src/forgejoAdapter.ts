@@ -104,8 +104,9 @@ export class ForgejoAdapter extends PlatformAdapter {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        do: 'merge',
-        merge_when_checks_succeed: true
+        Do: 'merge',
+        merge_when_checks_succeed: true,
+        delete_branch_after_merge: true
       }),
       timeoutMs: 10_000
     }).catch((error: unknown) => {

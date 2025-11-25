@@ -85,21 +85,69 @@ export class GitHubAdapter extends PlatformAdapter {
     token: string
   ): Promise<void> {
     const { owner, name } = this.splitOwnerRepo(repo);
-    const url = `https://api.github.com/repos/${owner}/${name}/pulls/${String(prNumber)}/merge`;
 
-    const response = await this.fetchWithTimeout(url, {
-      method: 'PUT',
+    // First, get the PR's node ID (required for GraphQL)
+    const prUrl = `https://api.github.com/repos/${owner}/${name}/pulls/${String(prNumber)}`;
+    const prResponse = await this.fetchWithTimeout(prUrl, {
       headers: {
         Authorization: `token ${token}`,
-        'Content-Type': 'application/json',
         Accept: 'application/vnd.github+json'
       },
-      body: JSON.stringify({ merge_method: 'rebase' }),
       timeoutMs: 10_000
     }).catch((error: unknown) => {
       logger.warn(
         { error: error instanceof Error ? error.message : String(error) },
-        'GitHub merge API failed'
+        'GitHub PR fetch failed'
+      );
+      return null;
+    });
+
+    if (!prResponse?.ok) {
+      logger.warn({ repo, prNumber }, 'Failed to fetch PR details for automerge');
+      return;
+    }
+
+    const prData = (await prResponse.json()) as { node_id?: string };
+    const pullRequestId = prData.node_id;
+
+    if (!pullRequestId) {
+      logger.warn({ repo, prNumber }, 'PR node_id not found');
+      return;
+    }
+
+    // Use GraphQL API to enable auto-merge
+    const graphqlUrl = 'https://api.github.com/graphql';
+    const mutation = `
+      mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
+        enablePullRequestAutoMerge(input: {
+          pullRequestId: $pullRequestId,
+          mergeMethod: REBASE
+        }) {
+          pullRequest {
+            autoMergeRequest {
+              enabledAt
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await this.fetchWithTimeout(graphqlUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/vnd.github+json'
+      },
+      body: JSON.stringify({
+        query: mutation,
+        variables: { pullRequestId }
+      }),
+      timeoutMs: 10_000
+    }).catch((error: unknown) => {
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'GitHub automerge GraphQL API failed'
       );
       return null;
     });
@@ -111,8 +159,19 @@ export class GitHubAdapter extends PlatformAdapter {
           prNumber,
           status: response?.status !== undefined ? String(response.status) : 'no-response'
         },
-        'GitHub merge API returned error'
+        'GitHub automerge API returned error'
       );
+      return;
+    }
+
+    const result = (await response.json()) as { errors?: unknown[] };
+    if (result.errors) {
+      logger.warn(
+        { repo, prNumber, errors: result.errors },
+        'GitHub automerge GraphQL returned errors'
+      );
+    } else {
+      logger.info({ repo, prNumber }, 'Successfully enabled automerge on PR');
     }
   }
 
