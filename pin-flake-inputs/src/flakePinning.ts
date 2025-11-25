@@ -16,6 +16,7 @@ interface FlakeLockNode {
     readonly ref?: string;
   };
   readonly original?: {
+    readonly type?: string;
     readonly ref?: string;
     readonly url?: string;
   };
@@ -44,6 +45,7 @@ interface PinnedInput {
   readonly host: string | undefined;
   readonly url: string | undefined;
   readonly originalUrl: string | undefined;
+  readonly originalType: string | undefined;
   readonly originalRef: string | undefined;
 }
 
@@ -92,6 +94,7 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
         host: type === 'gitlab' ? (locked.host ?? 'gitlab.com') : undefined,
         url: undefined,
         originalUrl: undefined,
+        originalType: original?.type,
         originalRef: original?.ref ?? locked.ref
       };
     } else if (type === 'git') {
@@ -108,6 +111,7 @@ export function extractPinnableInputs(flakeLock: FlakeLock): PinnedInput[] {
         host: undefined,
         url: locked.url,
         originalUrl: original?.url,
+        originalType: original?.type,
         originalRef: original?.ref ?? locked.ref
       };
     } else {
@@ -144,10 +148,16 @@ function buildRenovateComment(input: PinnedInput, indent: string): string {
     }
     parts.push(`host=${input.host}`);
   } else if (input.type === 'git') {
-    if (!input.url) {
+    // Use originalUrl if available, otherwise fall back to locked url
+    let url = input.originalUrl ?? input.url;
+    if (!url) {
       throw new Error(`Git input ${input.name} missing url`);
     }
-    parts.push(`url=${input.url}`);
+    // Add git+ prefix if original type is 'git' and URL starts with https:// or http://
+    if (input.originalType === 'git' && (url.startsWith('https://') || url.startsWith('http://')) && !url.startsWith('git+')) {
+      url = `git+${url}`;
+    }
+    parts.push(`url=${url}`);
     if (input.originalRef) {
       parts.push(`branch=${input.originalRef}`);
     }
@@ -171,11 +181,14 @@ function buildPinnedUrl(input: PinnedInput): string {
     }
     return `gitlab:${input.owner}/${input.repo}/${input.rev}`;
   } else if (input.type === 'git') {
-    // Use originalUrl if available (preserves git+https:// prefix)
-    // Otherwise fall back to locked.url
-    const baseUrl = input.originalUrl ?? input.url;
+    // Use originalUrl if available, otherwise fall back to locked.url
+    let baseUrl = input.originalUrl ?? input.url;
     if (!baseUrl) {
       throw new Error(`Git input ${input.name} missing url`);
+    }
+    // Add git+ prefix if original type is 'git' and URL starts with https:// or http://
+    if (input.originalType === 'git' && (baseUrl.startsWith('https://') || baseUrl.startsWith('http://')) && !baseUrl.startsWith('git+')) {
+      baseUrl = `git+${baseUrl}`;
     }
     // Remove any existing query parameters before adding rev
     const cleanUrl = baseUrl.split('?')[0];

@@ -41,6 +41,7 @@ describe('extractPinnableInputs', () => {
       host: undefined,
       url: undefined,
       originalUrl: undefined,
+      originalType: undefined,
       originalRef: 'nixos-unstable'
     });
   });
@@ -81,6 +82,7 @@ describe('extractPinnableInputs', () => {
       host: 'gitlab.example.com',
       url: undefined,
       originalUrl: undefined,
+      originalType: undefined,
       originalRef: 'main'
     });
   });
@@ -102,7 +104,7 @@ describe('extractPinnableInputs', () => {
           },
           original: {
             type: 'git',
-            url: 'git+https://git.oops.city/nalabelle/resume-builder',
+            url: 'https://git.oops.city/nalabelle/resume-builder',
             ref: 'refs/heads/main'
           }
         }
@@ -120,7 +122,8 @@ describe('extractPinnableInputs', () => {
       repo: undefined,
       host: undefined,
       url: 'https://git.oops.city/nalabelle/resume-builder',
-      originalUrl: 'git+https://git.oops.city/nalabelle/resume-builder',
+      originalUrl: 'https://git.oops.city/nalabelle/resume-builder',
+      originalType: 'git',
       originalRef: 'refs/heads/main'
     });
   });
@@ -401,6 +404,28 @@ describe('pinFlakeInputs', () => {
   it('correctly pins multiple block-format inputs from real music flake', async () => {
     // Copy fixtures to test directory
     const fixturesDir = join(import.meta.dirname, 'fixtures', 'music-flake');
+    const flakeLockContent = await readFile(join(fixturesDir, 'flake.lock'), 'utf8');
+    const flakeNixContent = await readFile(join(fixturesDir, 'flake.nix'), 'utf8');
+    const expectedContent = await readFile(join(fixturesDir, 'flake-expected.nix'), 'utf8');
+
+    await writeFile(join(testDir, 'flake.lock'), flakeLockContent);
+    await writeFile(join(testDir, 'flake.nix'), flakeNixContent);
+
+    const result = await pinFlakeInputs(testDir);
+
+    // Should return true (changes made)
+    expect(result).toBe(true);
+
+    // Read the updated flake.nix
+    const updatedFlakeNix = await readFile(join(testDir, 'flake.nix'), 'utf8');
+
+    // Should match expected output exactly
+    expect(updatedFlakeNix).toBe(expectedContent);
+  });
+
+  it('preserves git+ prefix in URLs for git inputs', async () => {
+    // Copy fixtures to test directory
+    const fixturesDir = join(import.meta.dirname, 'fixtures', 'resume-flake');
     const flakeLockContent = await readFile(join(fixturesDir, 'flake.lock'), 'utf8');
     const flakeNixContent = await readFile(join(fixturesDir, 'flake.nix'), 'utf8');
     const expectedContent = await readFile(join(fixturesDir, 'flake-expected.nix'), 'utf8');
