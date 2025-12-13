@@ -12,6 +12,7 @@
     ":semanticCommits",
     ":separateMajorReleases",
     "docker:enableMajor",
+    ":maintainLockFilesWeekly",
     "regexManagers:dockerfileVersions" //Like the regex customManager below for Dockerfiles
   ],
   // schedule uses cron syntax: minute hour day-of-month month day-of-week
