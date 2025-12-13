@@ -3,169 +3,91 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
     flake-utils.url = "github:numtide/flake-utils";
-    git-hooks.url = "github:cachix/git-hooks.nix";
+    dotfiles = {
+      url = "github:nalabelle/dotfiles";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+    };
     pin-flake-inputs.url = "path:./pin-flake-inputs";
+    renovate-source = {
+      # Shallow clone
+      url = "git+https://github.com/renovatebot/renovate?shallow=1";
+      flake = false;
+    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      flake-utils,
+      flake-parts,
       ...
     }@inputs:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-        };
-      in
-      {
-        # Wrap renovate with its dependencies
-        packages.renovate-wrapped = pkgs.writeShellApplication {
-          name = "renovate";
-          runtimeInputs = with pkgs; [
-            bash
-            cargo
-            coreutils
-            curl
-            gitMinimal
-            gnumake
-            nix
-            nixos-rebuild
-            nodejs_latest
-            openssh
-            renovate
-            wget
-          ];
-          text = ''
-            export RENOVATE_CONFIG_FILE="''${RENOVATE_CONFIG_FILE:-config.js}"
-            exec ${pkgs.renovate}/bin/renovate "$@"
-          '';
-        };
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ inputs.dotfiles.flakeModules.pre-commit ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
+      perSystem =
+        {
+          pkgs,
+          config,
+          lib,
+          system,
+          ...
+        }:
+        {
 
-        # Run the hooks with `nix fmt`.
-        formatter = (
-          let
-            config = self.checks.${system}.pre-commit-check.config;
-            inherit (config) package configFile;
-            script = ''
-              ${package}/bin/pre-commit run --all-files --config ${configFile}
+          # Wrap renovate with its dependencies
+          packages.renovate-wrapped = pkgs.writeShellApplication {
+            name = "renovate";
+            runtimeInputs = with pkgs; [
+              bash
+              cargo
+              coreutils
+              curl
+              gitMinimal
+              gnumake
+              nix
+              nixos-rebuild
+              nodejs_latest
+              openssh
+              renovate
+              wget
+            ];
+            text = ''
+              export RENOVATE_CONFIG_FILE="''${RENOVATE_CONFIG_FILE:-config.js}"
+              exec ${pkgs.renovate}/bin/renovate "$@"
             '';
-          in
-          pkgs.writeShellScriptBin "pre-commit-run" script
-        );
+          };
 
-        # Run the hooks in a sandbox with `nix flake check`.
-        # Read-only filesystem and no internet access.
-        # https://github.com/cachix/git-hooks.nix#hooks
-        checks = {
-          pre-commit-check = inputs.git-hooks.lib.${system}.run {
-            src = ./.;
-            hooks = {
-              fix-byte-order-marker.enable = true;
-              check-case-conflicts.enable = true;
-              check-executables-have-shebangs.enable = true;
-              end-of-file-fixer.enable = true;
-              mixed-line-endings.enable = true;
-              trim-trailing-whitespace.enable = true;
-              check-shebang-scripts-are-executable = {
-                enable = true;
-                excludes = [ "\.j2$" ];
-              };
-              check-symlinks.enable = true;
-              check-merge-conflicts.enable = true;
+          devShells.default = pkgs.mkShell {
+            inputsFrom = [ config.devShells.pre-commit ];
+            RENOVATE_CONFIG_FILE = "config.js";
+            LOG_LEVEL = "INFO";
 
-              check-json.enable = true;
-              check-yaml = {
-                enable = true;
-                args = [ "--allow-multiple-documents" ];
-              };
-              check-toml.enable = true;
-              shellcheck.enable = true;
+            buildInputs = with pkgs; [
+              pre-commit
+              prettier
 
-              # Custom hooks from jumanjihouse/pre-commit-hooks
-              forbid-binary = {
-                name = "forbid-binary";
-                description = "Forbid binary files from being committed";
-                entry =
-                  let
-                    script = pkgs.writeShellScript "forbid-binary" ''
-                      set -e
-                      for file in "$@"; do
-                        if [[ -f "$file" ]] && ! file --mime-encoding "$file" | grep -q 'us-ascii\|utf-8'; then
-                          echo "Binary file detected: $file"
-                          exit 1
-                        fi
-                      done
-                    '';
-                  in
-                  "${script}";
-                language = "system";
-                types = [ "file" ];
-              };
+              self.packages.${system}.renovate-wrapped
+            ];
 
-              script-must-have-extension = {
-                name = "script-must-have-extension";
-                description = "Ensure that executable scripts have file extensions";
-                entry =
-                  let
-                    script = pkgs.writeShellScript "script-must-have-extension" ''
-                      set -e
-                      for file in "$@"; do
-                        if [[ -x "$file" ]] && [[ ! "$file" =~ \. ]]; then
-                          echo "Executable script without extension: $file"
-                          exit 1
-                        fi
-                      done
-                    '';
-                  in
-                  "${script}";
-                language = "system";
-                types = [ "executable" ];
-                excludes = [ "\.envrc$" ];
-              };
+            shellHook = ''
+              echo "Dev environment loaded."
 
-              script-must-not-have-extension = {
-                name = "script-must-not-have-extension";
-                description = "Ensure that non-executable scripts do not have file extensions";
-                entry =
-                  let
-                    script = pkgs.writeShellScript "script-must-not-have-extension" ''
-                      set -e
-                      for file in "$@"; do
-                        if [[ ! -x "$file" ]] && [[ "$file" =~ ^[^/]*\.[^/]*$ ]] && file --mime-type "$file" | grep -q 'text/x-shellscript\|text/x-script'; then
-                          echo "Non-executable script with extension: $file"
-                          exit 1
-                        fi
-                      done
-                    '';
-                  in
-                  "${script}";
-                language = "system";
-                types = [ "text" ];
-              };
-
-              nixfmt-rfc-style.enable = true;
-            };
+              # Create symlinks to flake inputs for reference
+              KB="knowledge-base"
+              mkdir -p "$KB"
+              ln -sfn ${inputs.renovate-source} "$KB/renovate-source"
+              echo "Renovate source available at $KB/renovate-source/"
+              echo "Remember to use trailing slashes to access knowledge base symlinks."
+            '';
           };
         };
-
-        devShells.default = pkgs.mkShell {
-          inherit (self.checks.${system}.pre-commit-check) shellHook enabledPackages;
-          RENOVATE_CONFIG_FILE = "config.js";
-          LOG_LEVEL = "INFO";
-
-          buildInputs = with pkgs; [
-            pre-commit
-            prettier
-
-            self.packages.${system}.renovate-wrapped
-          ];
-        };
-      }
-    );
+    };
 }
