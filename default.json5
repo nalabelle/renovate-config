@@ -1,7 +1,7 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "configMigration": true,
-  "extends": [
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  configMigration: true,
+  extends: [
     "config:best-practices",
     // Enables dockerfile version updates, not just digests
     "preview:dockerVersions",
@@ -13,72 +13,72 @@
     ":separateMajorReleases",
     "docker:enableMajor",
     ":maintainLockFilesWeekly",
-    "regexManagers:dockerfileVersions" //Like the regex customManager below for Dockerfiles
+    "regexManagers:dockerfileVersions", //Like the regex customManager below for Dockerfiles
   ],
   // schedule uses cron syntax: minute hour day-of-month month day-of-week
   // "* 1-5 * * 6" means: any minute, between 1 AM and 5 AM, any day of month, any month, on Saturday (day 6)
   // This schedules Renovate to run between 1 AM to 5 AM Pacific Time on Saturdays only
-  "schedule": ["* 1-5 * * 6"],
-  "timezone": "America/Los_Angeles",
+  schedule: ["* 1-5 * * 6"],
+  timezone: "America/Los_Angeles",
   // Enable Nix package manager support
-  "nix": {
-    "enabled": true
+  nix: {
+    enabled: true,
   },
-  "customManagers": [
+  customManagers: [
     {
       // Configures Renovate to look for ENV/ARG version lines in Dockerfiles.
       // > # renovate: datasource=github-tags depName=nodejs/node versioning=node
       // > ENV NODE_VERSION=10.19.0
       // See docs: https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
-      "customType": "regex",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s"
+      customType: "regex",
+      fileMatch: ["(^|/)Dockerfile$"],
+      matchStrings: [
+        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ENV|ARG) .*?_VERSION=(?<currentValue>.*)\\s",
       ],
-      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
     },
   ],
-  "postUpdateOptions": ["npmDedupe"],
-  "packageRules": [
+  postUpdateOptions: ["npmDedupe"],
+  packageRules: [
     {
-      // Add 7-day stability period for nixpkgs updates
-      // Ensures binary caches are available and provides time for community review
-      // The native Nix manager handles flake inputs and respects this rule
-      "matchManagers": ["nix"],
-      "matchPackageNames": ["nixpkgs"],
-      "stabilityDays": 7
+      // Keep nixpkgs locks behind master branch
+      // Uses minimumReleaseAge (not stabilityDays) since nixpkgs is tracked as a git-refs
+      // commit digest rather than a versioned release; commit timestamps are used for the age check
+      matchManagers: ["nix"],
+      matchPackageNames: ["nixpkgs"],
+      minimumReleaseAge: "7 days",
     },
     {
       // Add reminder comment for npm packages that need hash updates
-      "matchFileNames": ["packages/*/package.json"],
-      "prBodyNotes": [
-        "⚠️ **Manual Action Required**: After merging this PR, run `./tools/update-npm-hashes` to update the corresponding Nix package hashes."
-      ]
+      matchFileNames: ["packages/*/package.json"],
+      prBodyNotes: [
+        "⚠️ **Manual Action Required**: After merging this PR, run `./tools/update-npm-hashes` to update the corresponding Nix package hashes.",
+      ],
     },
     {
       // Add 2-week delay for Node.js updates in DevBox configurations
       // Avoids needing to run builds by waiting for packages to be cached
-      "matchFileNames": ["devbox.json"],
-      "matchPackagePatterns": ["^nodejs(_\\d+)?$"],
-      "stabilityDays": 14
+      matchFileNames: ["devbox.json"],
+      matchPackagePatterns: ["^nodejs(_\\d+)?$"],
+      stabilityDays: 14,
     },
     {
       // Configure lockfile maintenance to run once a week
-      "matchUpdateTypes": ["lockFileMaintenance"],
-      "schedule": ["* 1-5 * * 6"], // Same schedule as main config: Saturday 1-5 AM
-      "groupName": "Lockfile Maintenance",
-      "automerge": true
+      matchUpdateTypes: ["lockFileMaintenance"],
+      schedule: ["* 1-5 * * 6"], // Same schedule as main config: Saturday 1-5 AM
+      groupName: "Lockfile Maintenance",
+      automerge: true,
     },
     {
-      "groupName": "all non-major dependencies, including digests",
-      "groupSlug": "all-minor-patch-digest",
-      "matchPackagePatterns": ["*"],
-      "matchUpdateTypes": ["digest", "minor", "patch", "pin"],
-      "automerge": true
+      groupName: "all non-major dependencies, including digests",
+      groupSlug: "all-minor-patch-digest",
+      matchPackagePatterns: ["*"],
+      matchUpdateTypes: ["digest", "minor", "patch", "pin"],
+      automerge: true,
     },
     {
-      "matchUpdateTypes": ["pin"],
-      "automerge": true
-    }
-  ]
+      matchUpdateTypes: ["pin"],
+      automerge: true,
+    },
+  ],
 }
