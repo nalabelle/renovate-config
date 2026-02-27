@@ -12,14 +12,13 @@
     ":semanticCommits",
     ":separateMajorReleases",
     "docker:enableMajor",
-    ":maintainLockFilesWeekly",
     "regexManagers:dockerfileVersions", //Like the regex customManager below for Dockerfiles
   ],
   // schedule uses cron syntax: minute hour day-of-month month day-of-week
   // "* 1-5 * * 6" means: any minute, between 1 AM and 5 AM, any day of month, any month, on Saturday (day 6)
-  // This schedules Renovate to run between 1 AM to 5 AM Pacific Time on Saturdays only
+  // This schedules Renovate to run between 1 AM to 5 AM Eastern Time on Saturdays only
   schedule: ["* 1-5 * * 6"],
-  timezone: "America/Los_Angeles",
+  timezone: "America/New_York",
   // Enable Nix package manager support
   nix: {
     enabled: true,
@@ -38,14 +37,19 @@
       versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
     },
   ],
+  lockFileMaintenance: {
+    enabled: true,
+    // schedule uses cron syntax; Saturday 1-5 AM Eastern (same as main schedule)
+    schedule: ["* 1-5 * * 6"],
+    automerge: true,
+  },
   postUpdateOptions: ["npmDedupe"],
   packageRules: [
     {
-      // Keep nixpkgs locks behind master branch
-      // Uses minimumReleaseAge (not stabilityDays) since nixpkgs is tracked as a git-refs
-      // commit digest rather than a versioned release; commit timestamps are used for the age check
+      // Keep all nix flake input locks 7 days behind to allow stabilization
+      // Uses minimumReleaseAge (not stabilityDays) since nix inputs are tracked as git-refs
+      // commit digests rather than versioned releases; commit timestamps are used for the age check
       matchManagers: ["nix"],
-      matchPackageNames: ["nixpkgs"],
       minimumReleaseAge: "7 days",
     },
     {
@@ -61,13 +65,6 @@
       matchFileNames: ["devbox.json"],
       matchPackagePatterns: ["^nodejs(_\\d+)?$"],
       stabilityDays: 14,
-    },
-    {
-      // Configure lockfile maintenance to run once a week
-      matchUpdateTypes: ["lockFileMaintenance"],
-      schedule: ["* 1-5 * * 6"], // Same schedule as main config: Saturday 1-5 AM
-      groupName: "Lockfile Maintenance",
-      automerge: true,
     },
     {
       groupName: "all non-major dependencies, including digests",
