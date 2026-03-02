@@ -46,9 +46,12 @@
   postUpdateOptions: ["npmDedupe"],
   packageRules: [
     {
-      // Keep all nix flake input locks 7 days behind to allow stabilization
-      // Uses minimumReleaseAge (not stabilityDays) since nix inputs are tracked as git-refs
-      // commit digests rather than versioned releases; commit timestamps are used for the age check
+      // NOTE: minimumReleaseAge does NOT work for nix flake inputs in practice.
+      // Per-input PRs are broken in Renovate (see renovatebot/renovate#33991),
+      // so nix updates only happen via lockFileMaintenance, which runs
+      // `nix flake lock` directly and always resolves to the latest commit,
+      // ignoring minimumReleaseAge entirely (0-day trailing every run).
+      // Keeping this rule for when per-input PRs are eventually fixed upstream.
       matchManagers: ["nix"],
       minimumReleaseAge: "7 days",
     },

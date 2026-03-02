@@ -10,9 +10,6 @@ var config = {
       "token": process.env.GITHUB_TOKEN,
     },
   ],
-  force: {
-    "schedule": ["at any time"],
-  },
 };
 
 export default config;
